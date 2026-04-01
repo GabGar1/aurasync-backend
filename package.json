@@ -1,0 +1,37 @@
+{
+  "name": "aurasync-backend",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "node --import tsx --test src/**/*.test.ts",
+    "dev": "tsx watch src/server.ts",
+    "db:make": "knex migrate:make -x ts",
+    "db:migrate": "node --import tsx ./node_modules/knex/bin/cli.js migrate:latest",
+    "db:rollback": "node --import tsx ./node_modules/knex/bin/cli.js migrate:rollback"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@fastify/jwt": "^10.0.0",
+    "bcrypt": "^6.0.0",
+    "cors": "^2.8.6",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "fastify": "^5.8.4",
+    "fastify-type-provider-zod": "^6.1.0",
+    "knex": "^3.2.5",
+    "pg": "^8.20.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/bcrypt": "^6.0.0",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.5.0",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.2"
+  }
+}
