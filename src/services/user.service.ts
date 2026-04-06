@@ -27,19 +27,15 @@ export class UserService {
   }
 
   async createUser(userData: UserRegister): Promise<Omit<User, 'password_hash'> & { first_name: string; last_name: string }> {
-    // Validate input
     const validatedData = UserSchema.register.parse(userData);
 
-    // Check if email already exists
     const existingUser = await userRepository.findByEmail(validatedData.email);
     if (existingUser) {
       throw new Error('Email already registered');
     }
 
-    // Hash password
     const passwordHash = await this.hashPassword(validatedData.password);
 
-    // Create user input for repository
     const createInput: CreateUserInput = {
       first_name: validatedData.first_name,
       last_name: validatedData.last_name,
@@ -54,16 +50,13 @@ export class UserService {
   }
 
   async authenticateUser(credentials: UserLogin): Promise<Omit<User, 'password_hash'> & { first_name: string; last_name: string } | null> {
-    // Validate input
     const validatedCredentials = UserSchema.login.parse(credentials);
 
-    // Find user by email
     const user = await userRepository.findByEmail(validatedCredentials.email);
     if (!user) {
       return null;
     }
 
-    // Verify password
     const isValidPassword = await this.verifyPassword(validatedCredentials.password, user.password_hash);
     if (!isValidPassword) {
       return null;
@@ -78,22 +71,21 @@ export class UserService {
   }
 
   async updateUser(id: string, userData: UserUpdate): Promise<Omit<User, 'password_hash'> & { first_name: string; last_name: string } | null> {
-    // Validate input
     const validatedData = UserSchema.update.parse(userData);
 
-    // Check if user exists
     const existingUser = await userRepository.findById(id);
     if (!existingUser) {
       throw new Error('User not found');
     }
 
-    // Prepare update data
     const updateData: UpdateUserInput = {};
-    
-    if (validatedData.username || validatedData.first_name || validatedData.last_name) {
-      const firstName = validatedData.first_name;
-      const lastName = validatedData.last_name;
-      updateData.name = `${firstName} ${lastName}`;
+
+    if (validatedData.first_name) {
+      updateData.first_name = validatedData.first_name;
+    }
+
+    if (validatedData.last_name) {
+      updateData.last_name = validatedData.last_name;
     }
 
     const updatedUser = await userRepository.update(id, updateData);
@@ -101,30 +93,24 @@ export class UserService {
   }
 
   async changePassword(id: string, passwordData: UserChangePassword): Promise<boolean> {
-    // Validate input
     const validatedData = UserSchema.changePassword.parse(passwordData);
 
-    // Get current user
     const user = await userRepository.findById(id);
     if (!user) {
       throw new Error('User not found');
     }
 
-    // Verify current password
     const isValidPassword = await this.verifyPassword(validatedData.current_password, user.password_hash);
     if (!isValidPassword) {
       throw new Error('Current password is incorrect');
     }
 
-    // Hash new password
     const newPasswordHash = await this.hashPassword(validatedData.new_password);
 
-    // Update password
     return userRepository.updatePassword(id, newPasswordHash);
   }
 
   async deleteUser(id: string): Promise<boolean> {
-    // Check if user exists
     const user = await userRepository.findById(id);
     if (!user) {
       throw new Error('User not found');

@@ -5,7 +5,6 @@ export const UserSchema = {
   base: z.object({
     id: z.uuid(),
     email: z.email('Invalid email format'),
-    username: z.string().min(3, 'Username must be at least 3 characters').max(50, 'Username cannot exceed 50 characters'),
     password: z.string().min(6, 'Password must be at least 6 characters'),
     first_name: z.string().min(1, 'First name is required').max(100, 'First name cannot exceed 100 characters'),
     last_name: z.string().min(1, 'Last name is required').max(100, 'Last name cannot exceed 100 characters'),
@@ -17,7 +16,6 @@ export const UserSchema = {
   // Registration schema
   register: z.object({
     email: z.email('Invalid email format'),
-    username: z.string().min(3, 'Username must be at least 3 characters').max(50, 'Username cannot exceed 50 characters'),
     password: z.string().min(6, 'Password must be at least 6 characters'),
     first_name: z.string().min(1, 'First name is required').max(100, 'First name cannot exceed 100 characters'),
     last_name: z.string().min(1, 'Last name is required').max(100, 'Last name cannot exceed 100 characters'),
@@ -31,7 +29,6 @@ export const UserSchema = {
 
   // Update profile schema (all fields optional)
   update: z.object({
-    username: z.string().min(3, 'Username must be at least 3 characters').max(50, 'Username cannot exceed 50 characters').optional(),
     first_name: z.string().min(1, 'First name is required').max(100, 'First name cannot exceed 100 characters').optional(),
     last_name: z.string().min(1, 'Last name is required').max(100, 'Last name cannot exceed 100 characters').optional(),
     status: z.boolean().optional(),
@@ -47,7 +44,6 @@ export const UserSchema = {
   response: z.object({
     id: z.uuid(),
     email: z.email(),
-    username: z.string(),
     first_name: z.string(),
     last_name: z.string(),
     created_at: z.date(),
@@ -59,7 +55,6 @@ export const UserSchema = {
     users: z.array(z.object({
       id: z.number(),
       email: z.email(),
-      username: z.string(),
       first_name: z.string(),
       last_name: z.string(),
       created_at: z.date(),
