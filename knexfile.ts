@@ -8,6 +8,11 @@ const config: Knex.Config = {
     directory: "./src/database/migrations",
     extension: "ts",
   },
+  pool: {
+    min: 0,
+    max: 10,
+    idleTimeoutMillis: 100
+  }
 };
 
 export default config;

@@ -1,7 +1,7 @@
-import { describe, it, after } from "node:test";
+import {describe, it, after, before} from "node:test";
 import assert from "node:assert";
 import { userService } from "./user.service.js";
-import { db } from "../lib/db.js";
+import {cleanupDatabase} from "../test/setup";
 
 describe("UserService Integration Tests", () => {
   const testEmails = [
@@ -13,10 +13,12 @@ describe("UserService Integration Tests", () => {
 
   let mainUserId: string;
 
-  // Limpa o banco após rodar todos os testes
+  before(async () => {
+    await cleanupDatabase();
+  });
+
   after(async () => {
-    await db("users").whereIn("email", testEmails).del();
-    await db.destroy();
+    await cleanupDatabase();
   });
 
   // --- CREATE ---

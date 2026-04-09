@@ -3,6 +3,9 @@ import { serializerCompiler, validatorCompiler } from "fastify-type-provider-zod
 import "dotenv/config";
 import fastifyJwt from "@fastify/jwt";
 import {userRoutes} from "./routers/user.router";
+import { productRoutes } from './routers/product.router.js';
+import {orderRoutes} from "./routers/order.router";
+import {inventoryRoutes} from "./routers/inventory.router";
 
 declare module "fastify" {
   export interface FastifyInstance {
@@ -28,17 +31,14 @@ app.decorate("authenticate", async (request: FastifyRequest, reply: FastifyReply
 });
 
 app.register(userRoutes, { prefix: "/api" });
-
-app.get("/ping", async (request, reply) => {
-  return { status: "ok", message: "AuraSync API rodando lisa! 🚀" };
-});
+app.register(productRoutes, { prefix: "/api/products" });
+app.register(orderRoutes, { prefix: '/api/orders' });
+app.register(inventoryRoutes, { prefix: '/api/inventory' });
 
 const start = async () => {
   try {
     const port = Number(process.env.PORT) || 3333;
-    // Em containers/Docker ou deploys modernos, o host deve ser "0.0.0.0"
     await app.listen({ port, host: "0.0.0.0" });
-    console.log(`Servidor rodando na porta ${port}`);
   } catch (err) {
     app.log.error(err);
     process.exit(1);

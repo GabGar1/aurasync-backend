@@ -1,7 +1,8 @@
-import { describe, it, after } from "node:test";
+import {describe, it, after, before} from "node:test";
 import assert from "node:assert";
 import { productService } from "./product.service.js";
 import { db } from "../lib/db.js";
+import {cleanupDatabase} from "../test/setup";
 
 describe("ProductService Integration Tests", () => {
   // Lista de slugs que vamos usar e depois limpar do banco
@@ -13,6 +14,14 @@ describe("ProductService Integration Tests", () => {
   ];
 
   let mainProductId: string;
+
+  before(async () => {
+    await cleanupDatabase();
+  });
+
+  after(async () => {
+    await cleanupDatabase();
+  });
 
   // Limpa o banco após rodar todos os testes (Hard Delete real para limpar sujeira de teste)
   after(async () => {
