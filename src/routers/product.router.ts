@@ -18,7 +18,7 @@ export const productRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   fastify.post('/sync/nuvemshop', {
-    onRequest: [fastify.authenticate] // Protegida! Só logado pode apertar o botão
+    onRequest: [fastify.authenticate]
   }, async (request, reply) => {
     try {
       const result = await nuvemshopService.syncProducts();
