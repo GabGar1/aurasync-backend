@@ -171,6 +171,10 @@ export class ProductRepository {
     });
   }
 
+  async findByNuvemshopId(nuvemshopId: string) {
+    return await db(this.productsTable).where({ nuvemshop_id: nuvemshopId }).first();
+  }
+
   async findAll(
     page: number = 1,
     limit: number = 10,

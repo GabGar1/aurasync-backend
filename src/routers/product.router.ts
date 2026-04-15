@@ -1,10 +1,14 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { productService } from '../services/product.service.js';
+import {requireRole} from "../middlewares/role.middleware";
+import {nuvemshopService} from "../services/nuvemshop.service";
 
 export const productRoutes: FastifyPluginAsync = async (fastify) => {
 
-  // 1. CREATE: POST /api/products
-  fastify.post('/', async (request, reply) => {
+  fastify.post('/', {
+    onRequest: [fastify.authenticate],
+    preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])]
+  }, async (request, reply) => {
     try {
       const product = await productService.createProduct(request.body as any);
       return reply.code(201).send(product);
@@ -13,12 +17,21 @@ export const productRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
-  // 2. LISTAGEM PAGINADA: GET /api/products
+  fastify.post('/sync/nuvemshop', {
+    onRequest: [fastify.authenticate] // Protegida! Só logado pode apertar o botão
+  }, async (request, reply) => {
+    try {
+      const result = await nuvemshopService.syncProducts();
+      return reply.send(result);
+    } catch (error: any) {
+      return reply.code(400).send({ error: error.message });
+    }
+  });
+
   fastify.get('/', async (request, reply) => {
     try {
       const { page, limit, search, category, is_active } = request.query as any;
 
-      // Construímos o objeto de filtros dinamicamente (Padrão Sênior)
       const filters: { search?: string; category?: string; is_active?: boolean } = {};
 
       if (search !== undefined) filters.search = String(search);
@@ -37,7 +50,6 @@ export const productRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
-  // 3. BUSCA POR ID: GET /api/products/:id
   fastify.get('/:id', async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
@@ -51,7 +63,6 @@ export const productRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
-  // 4. BUSCA POR SLUG (Essencial para E-commerce): GET /api/products/slug/:slug
   fastify.get('/slug/:slug', async (request, reply) => {
     try {
       const { slug } = request.params as { slug: string };
@@ -65,8 +76,10 @@ export const productRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
-  // 5. UPDATE: PUT /api/products/:id
-  fastify.put('/:id', async (request, reply) => {
+  fastify.put('/:id', {
+    onRequest: [fastify.authenticate],
+    preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])]
+  }, async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
       const product = await productService.updateProduct(id, request.body as any);
@@ -79,8 +92,10 @@ export const productRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
-  // 6. DELETE: DELETE /api/products/:id
-  fastify.delete('/:id', async (request, reply) => {
+  fastify.delete('/:id', {
+    onRequest: [fastify.authenticate],
+    preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])]
+  }, async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
       await productService.deleteProduct(id);

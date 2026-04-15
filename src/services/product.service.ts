@@ -82,6 +82,10 @@ export class ProductService {
     return await productRepository.update(id, updateData);
   }
 
+  async findByNuvemshopId(nuvemshopId: string) {
+    return await productRepository.findByNuvemshopId(nuvemshopId);
+  }
+
   async deleteProduct(id: string): Promise<boolean> {
     const existingProduct = await productRepository.findById(id);
     if (!existingProduct) {

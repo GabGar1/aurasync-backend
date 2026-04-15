@@ -35,6 +35,10 @@ export class InventoryService {
     }
     return await inventoryRepository.getHistoryByVariantId(variantId);
   }
+
+  async getGlobalHistory(page: number = 1, limit: number = 50) {
+    return await inventoryRepository.getAllHistory(page, limit);
+  }
 }
 
 export const inventoryService = new InventoryService();

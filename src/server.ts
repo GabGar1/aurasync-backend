@@ -1,11 +1,14 @@
 import Fastify, {type FastifyReply, type FastifyRequest} from "fastify";
-import { serializerCompiler, validatorCompiler } from "fastify-type-provider-zod";
+import {jsonSchemaTransform, serializerCompiler, validatorCompiler} from "fastify-type-provider-zod";
 import "dotenv/config";
 import fastifyJwt from "@fastify/jwt";
 import {userRoutes} from "./routers/user.router";
 import { productRoutes } from './routers/product.router.js';
 import {orderRoutes} from "./routers/order.router";
 import {inventoryRoutes} from "./routers/inventory.router";
+import {fastifySwagger} from "@fastify/swagger";
+import {fastifySwaggerUi} from "@fastify/swagger-ui";
+import {fastifyCors} from "@fastify/cors";
 
 declare module "fastify" {
   export interface FastifyInstance {
@@ -14,6 +17,11 @@ declare module "fastify" {
 }
 
 const app = Fastify({ logger: true });
+
+app.register(fastifyCors, {
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE']
+});
 
 app.setValidatorCompiler(validatorCompiler);
 app.setSerializerCompiler(serializerCompiler);
@@ -30,6 +38,30 @@ app.decorate("authenticate", async (request: FastifyRequest, reply: FastifyReply
   }
 });
 
+app.register(fastifySwagger, {
+  openapi: {
+    info: {
+      title: 'AuraSync API',
+      description: 'Documentação oficial do E-commerce Backend',
+      version: '1.0.0',
+    },
+    components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+        },
+      },
+    },
+  },
+  transform: jsonSchemaTransform,
+});
+
+app.register(fastifySwaggerUi, {
+  routePrefix: '/docs',
+});
+
 app.register(userRoutes, { prefix: "/api" });
 app.register(productRoutes, { prefix: "/api/products" });
 app.register(orderRoutes, { prefix: '/api/orders' });
@@ -39,6 +71,7 @@ const start = async () => {
   try {
     const port = Number(process.env.PORT) || 3333;
     await app.listen({ port, host: "0.0.0.0" });
+    console.log(`📚 Swagger documentation available at http://localhost:${port}/docs`);
   } catch (err) {
     app.log.error(err);
     process.exit(1);

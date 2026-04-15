@@ -59,6 +59,20 @@ export class InventoryRepository {
       .where({ variant_id })
       .orderBy('created_at', 'desc');
   }
+
+  async getAllHistory(page: number = 1, limit: number = 50): Promise<any[]> {
+    const offset = (page - 1) * limit;
+
+    return await db(this.table)
+      .join('product_variants', `${this.table}.variant_id`, 'product_variants.id')
+      .select(
+        `${this.table}.*`,
+        'product_variants.sku as variantSku'
+      )
+      .orderBy(`${this.table}.created_at`, 'desc')
+      .limit(limit)
+      .offset(offset);
+  }
 }
 
 export const inventoryRepository = new InventoryRepository();
