@@ -3,7 +3,6 @@ import { orderService } from '../services/order.service.js';
 
 export const orderRoutes: FastifyPluginAsync = async (fastify) => {
 
-  // 1. CREATE: POST /api/orders
   fastify.post('/', async (request, reply) => {
     try {
       const order = await orderService.createOrder(request.body as any);
@@ -13,10 +12,8 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
-  // 2. LISTAGEM PAGINADA: GET /api/orders
   fastify.get('/', async (request, reply) => {
     try {
-      // Extraindo da URL: ?page=1&limit=10&status=PAID&search=João
       const { page, limit, status, search } = request.query as any;
 
       const filters: { status?: string; search?: string } = {};
@@ -35,7 +32,6 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
-  // 3. BUSCA POR ID: GET /api/orders/:id
   fastify.get('/:id', async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
@@ -49,7 +45,6 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
-  // 4. UPDATE (Status/Cliente): PUT /api/orders/:id
   fastify.put('/:id', async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
@@ -63,7 +58,6 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
-  // 5. DELETE (Cancelamento): DELETE /api/orders/:id
   fastify.delete('/:id', async (request, reply) => {
     try {
       const { id } = request.params as { id: string };

@@ -31,8 +31,6 @@ export class InventoryRepository {
         throw new Error('Product variant not found');
       }
 
-      // A mágica matemática: Como quantity_changed é negativo na saída,
-      // usar a soma (+) já resolve a matemática. Ex: 10 + (-3) = 7
       const newStock = variant.stock_quantity + data.quantity_changed;
 
       if (newStock < 0) {

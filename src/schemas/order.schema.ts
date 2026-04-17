@@ -81,7 +81,6 @@ export const OrderSchema = {
   }),
 };
 
-// Type exports for TypeScript inference
 export type Order = z.infer<typeof OrderSchema.base>;
 export type OrderCreate = z.infer<typeof OrderSchema.create>;
 export type OrderUpdate = z.infer<typeof OrderSchema.update>;

@@ -31,7 +31,7 @@ export class OrderService {
     });
 
     const createInput: CreateOrderInput = {
-      total_amount: calculatedTotal, // Usamos o nosso total calculado, blindando contra fraudes
+      total_amount: calculatedTotal,
       items,
     };
 

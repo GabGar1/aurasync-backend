@@ -107,7 +107,6 @@ export class UserRepository {
       .whereNull('deleted_at')
       .orderBy('created_at', 'desc');
 
-    // Apply filters
     if (filters.role) {
       query = query.where('role', filters.role);
     }
@@ -119,12 +118,10 @@ export class UserRepository {
       });
     }
 
-    // Get total count
     const totalQuery = query.clone().clearOrder().clearSelect().count('* as count');
     const totalResult = await totalQuery.first();
     const total = Number(totalResult?.count || 0);
 
-    // Apply pagination
     const offset = (page - 1) * limit;
     const users = await query.limit(limit).offset(offset);
 

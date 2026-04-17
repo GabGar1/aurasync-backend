@@ -4,7 +4,6 @@ import { userService } from "../services/user.service.js";
 import "@fastify/jwt";
 import { z } from "zod";
 
-// Auth middleware to verify JWT
 declare module "@fastify/jwt" {
   interface FastifyJWT {
     payload: { sub: string; role: string; name: string };
@@ -17,7 +16,6 @@ declare module "@fastify/jwt" {
 }
 
 export const userRoutes: FastifyPluginAsyncZod = async (app) => {
-  // POST /api/users - Create user
   app.post(
     "/users",
     {
@@ -35,7 +33,6 @@ export const userRoutes: FastifyPluginAsyncZod = async (app) => {
     }
   );
 
-  // POST /api/login - Authenticate user
   app.post(
     "/login",
     {
@@ -63,7 +60,6 @@ export const userRoutes: FastifyPluginAsyncZod = async (app) => {
     }
   );
 
-  // GET /api/users - List users (protected)
   app.get(
     "/users",
     {
@@ -94,7 +90,6 @@ export const userRoutes: FastifyPluginAsyncZod = async (app) => {
     }
   );
 
-  // GET /api/users/:id - Get user by ID (protected)
   app.get(
     "/users/:id",
     {
@@ -118,7 +113,6 @@ export const userRoutes: FastifyPluginAsyncZod = async (app) => {
     }
   );
 
-  // PUT /api/users/:id - Update user (protected)
   app.put(
     "/users/:id",
     {
@@ -143,7 +137,6 @@ export const userRoutes: FastifyPluginAsyncZod = async (app) => {
     }
   );
 
-  // PUT /api/users/:id/password - Change password (protected)
   app.put(
     "/users/:id/password",
     {
@@ -168,7 +161,6 @@ export const userRoutes: FastifyPluginAsyncZod = async (app) => {
     }
   );
 
-  // DELETE /api/users/:id - Delete user (protected)
   app.delete(
     "/users/:id",
     {
@@ -192,7 +184,6 @@ export const userRoutes: FastifyPluginAsyncZod = async (app) => {
     }
   );
 
-  // GET /api/users/role/:role - Get users by role (protected)
   app.get(
     "/users/role/:role",
     {
@@ -213,7 +204,6 @@ export const userRoutes: FastifyPluginAsyncZod = async (app) => {
     }
   );
 
-  // GET /api/users/stats - Get user stats (protected)
   app.get(
     "/users/stats",
     {
@@ -229,7 +219,6 @@ export const userRoutes: FastifyPluginAsyncZod = async (app) => {
     }
   );
 
-  // GET /api/users/check-email - Check email availability
   app.get(
     "/users/check-email",
     {

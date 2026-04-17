@@ -5,7 +5,6 @@ export const inventoryRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.post('/', async (request, reply) => {
     try {
-      // O body deve conter variant_id, type e quantity_changed
       const transaction = await inventoryService.addTransaction(request.body as any);
       return reply.code(201).send(transaction);
     } catch (error: any) {

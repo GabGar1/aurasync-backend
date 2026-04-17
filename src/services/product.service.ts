@@ -17,18 +17,15 @@ export class ProductService {
       throw new Error('A product with this slug already exists');
     }
 
-    // Montamos o Produto Pai dinamicamente
     const createInput: CreateProductInput = {
       slug: validatedData.slug,
       name: validatedData.name,
       variants: validatedData.variants.map(variant => {
-        // Obrigatórios da Variação
         const v: CreateVariantInput = {
           price: variant.price,
           stock_quantity: variant.stock_quantity,
         };
 
-        // Opcionais (Só entram no objeto se não forem undefined)
         if (variant.nuvemshop_variant_id !== undefined) v.nuvemshop_variant_id = variant.nuvemshop_variant_id;
         if (variant.sku !== undefined) v.sku = variant.sku;
         if (variant.name !== undefined) v.name = variant.name;
@@ -41,7 +38,6 @@ export class ProductService {
       }),
     };
 
-    // Opcionais do Produto Pai
     if (validatedData.nuvemshop_id !== undefined) createInput.nuvemshop_id = validatedData.nuvemshop_id;
     if (validatedData.category !== undefined) createInput.category = validatedData.category;
     if (validatedData.is_active !== undefined) createInput.is_active = validatedData.is_active;

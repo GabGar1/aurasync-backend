@@ -105,20 +105,16 @@ export class ProductRepository {
   async create(data: CreateProductInput): Promise<ProductWithVariants> {
     const { variants, ...productData } = data;
 
-    // Abrindo a transação: Se a variação falhar, o produto inteiro sofre rollback
     return await db.transaction(async (trx) => {
-      // 1. Cria o Produto
       const [product] = await trx(this.productsTable)
         .insert(productData)
         .returning('*');
 
-      // 2. Prepara as variações com o ID gerado do Produto
       const variantsToInsert = variants.map(variant => ({
         ...variant,
         product_id: product.id,
       }));
 
-      // 3. Insere todas as variações em Bulk (de uma vez só)
       const insertedVariants = await trx(this.variantsTable)
         .insert(variantsToInsert)
         .returning('*');
@@ -146,9 +142,7 @@ export class ProductRepository {
   }
 
   async delete(id: string): Promise<boolean> {
-    // Soft delete em cascata manual usando transaction
     return await db.transaction(async (trx) => {
-      // Deleta logicamente as variações primeiro
       await trx(this.variantsTable)
         .where({ product_id: id })
         .whereNull('deleted_at')
@@ -157,7 +151,6 @@ export class ProductRepository {
           updated_at: new Date(),
         });
 
-      // Deleta logicamente o produto
       const result = await trx(this.productsTable)
         .where({ id })
         .whereNull('deleted_at')
@@ -211,7 +204,6 @@ export class ProductRepository {
     const offset = (page - 1) * limit;
     const baseProducts = await query.limit(limit).offset(offset);
 
-    // Busca as variações de todos os produtos listados
     const products = await Promise.all(
       baseProducts.map(async (product) => {
         const variants = await db(this.variantsTable)

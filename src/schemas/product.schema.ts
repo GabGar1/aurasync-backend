@@ -1,8 +1,5 @@
 import { z } from 'zod';
 
-// --- Sub-schemas para Variações ---
-// Precisamos definir eles primeiro para usar dentro do ProductSchema
-
 const VariantBaseSchema = z.object({
   id: z.uuid(),
   product_id: z.uuid(),
@@ -31,10 +28,8 @@ const VariantCreateSchema = z.object({
   fixed_fee: z.number().min(0).optional(),
 });
 
-// --- Schema Principal do Produto ---
 
 export const ProductSchema = {
-  // Base product schema for database operations
   base: z.object({
     id: z.uuid(),
     nuvemshop_id: z.string().nullable().optional(),
@@ -46,7 +41,6 @@ export const ProductSchema = {
     updated_at: z.date().optional(),
   }),
 
-  // Create schema (Requires at least one variant)
   create: z.object({
     nuvemshop_id: z.string().optional(),
     slug: z.string().min(1, 'Slug is required').max(100, 'Slug cannot exceed 100 characters'),
@@ -56,7 +50,6 @@ export const ProductSchema = {
     variants: z.array(VariantCreateSchema).min(1, 'Product must have at least one variant'),
   }),
 
-  // Update schema (All fields optional, normally variants are updated separately or via specific sync logic)
   update: z.object({
     slug: z.string().min(1).max(100).optional(),
     name: z.string().min(1).max(150).optional(),
@@ -64,7 +57,6 @@ export const ProductSchema = {
     is_active: z.boolean().optional(),
   }),
 
-  // Product response schema (Includes its variants)
   response: z.object({
     id: z.uuid(),
     nuvemshop_id: z.string().nullable().optional(),
@@ -77,7 +69,6 @@ export const ProductSchema = {
     variants: z.array(VariantBaseSchema),
   }),
 
-  // Product list response schema
   listResponse: z.object({
     products: z.array(z.object({
       id: z.uuid(),
@@ -96,7 +87,6 @@ export const ProductSchema = {
   }),
 };
 
-// Type exports for TypeScript inference
 export type Product = z.infer<typeof ProductSchema.base>;
 export type ProductCreate = z.infer<typeof ProductSchema.create>;
 export type ProductUpdate = z.infer<typeof ProductSchema.update>;

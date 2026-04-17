@@ -28,7 +28,6 @@ export interface OrderItem {
   updated_at: Date;
 }
 
-// O Pedido Completo (Pai + Filhos)
 export interface OrderWithItems extends Order {
   items: OrderItem[];
 }
@@ -54,8 +53,6 @@ export interface UpdateOrderInput {
   customer_name?: string;
   status?: string;
 }
-
-// --- REPOSITORY ---
 
 export class OrderRepository {
   private ordersTable = 'orders';
