@@ -1,6 +1,8 @@
 import Fastify, {type FastifyReply, type FastifyRequest} from "fastify";
 import {jsonSchemaTransform, serializerCompiler, validatorCompiler} from "fastify-type-provider-zod";
 import "dotenv/config";
+import { websocketManager } from "./lib/websocket.js";
+import { WebSocketServer } from 'ws';
 import fastifyJwt from "@fastify/jwt";
 import {userRoutes} from "./routers/user.router";
 import { productRoutes } from './routers/product.router.js';
@@ -67,10 +69,20 @@ app.register(productRoutes, { prefix: "/api/products" });
 app.register(orderRoutes, { prefix: '/api/orders' });
 app.register(inventoryRoutes, { prefix: '/api/inventory' });
 
+
 const start = async () => {
   try {
     const port = Number(process.env.PORT) || 3333;
     await app.listen({ port, host: "0.0.0.0" });
+
+    // Manually create and attach the WebSocket server
+    const wss = new WebSocketServer({ server: app.server });
+
+    wss.on('connection', (socket) => {
+      websocketManager.add(socket);
+    });
+
+    console.log(`🚀 WebSocket server is running`);
     console.log(`📚 Swagger documentation available at http://localhost:${port}/docs`);
   } catch (err) {
     app.log.error(err);

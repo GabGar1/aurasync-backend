@@ -3,9 +3,11 @@ import {
   type ProductWithVariants,
   type CreateProductInput,
   type UpdateProductInput,
-  type CreateVariantInput // <-- Adicionado para o TypeScript parar de chorar
+  type CreateVariantInput,
+  type NuvemshopProductData
 } from '../repositories/product.repository.js';
 import { ProductSchema, type ProductCreate, type ProductUpdate } from '../schemas/product.schema.js';
+import { websocketManager } from '../lib/websocket.js';
 
 export class ProductService {
 
@@ -97,6 +99,25 @@ export class ProductService {
     filters: { search?: string; category?: string; is_active?: boolean } = {}
   ): Promise<{ products: ProductWithVariants[]; total: number; page: number; limit: number }> {
     return await productRepository.findAll(page, limit, filters);
+  }
+
+  async handleNuvemshopWebhook(data: NuvemshopProductData): Promise<ProductWithVariants> {
+    console.log(`Processing webhook for Nuvemshop product ID: ${data.id}`);
+
+    const updatedProduct = await productRepository.upsertProductFromNuvemshop(data);
+
+    // After the product is updated, notify all connected clients
+    websocketManager.broadcast({
+      event: 'products_updated',
+      message: `Product ${updatedProduct.name} (ID: ${updatedProduct.id}) was updated.`,
+      productId: updatedProduct.id
+    });
+
+    return updatedProduct;
+  }
+
+  async upsertProductFromNuvemshop(data: NuvemshopProductData): Promise<ProductWithVariants> {
+    return await productRepository.upsertProductFromNuvemshop(data);
   }
 }
 

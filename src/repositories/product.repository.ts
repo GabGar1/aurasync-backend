@@ -62,6 +62,26 @@ export interface UpdateProductInput {
   is_active?: boolean;
 }
 
+export interface NuvemshopVariantData {
+  id: string; // Nuvemshop's variant ID
+  sku?: string;
+  name?: string;
+  price: number;
+  stock_quantity: number;
+  cost_price?: number;
+  packaging_cost?: number;
+  platform_fee_percent?: number;
+  fixed_fee?: number;
+}
+
+export interface NuvemshopProductData {
+  id: string; // Nuvemshop's product ID
+  name: string;
+  category?: string;
+  is_active: boolean;
+  variants: NuvemshopVariantData[];
+}
+
 export class ProductRepository {
   private productsTable = 'products';
   private variantsTable = 'product_variants';
@@ -161,6 +181,80 @@ export class ProductRepository {
         });
 
       return result > 0;
+    });
+  }
+
+  async upsertProductFromNuvemshop(data: NuvemshopProductData): Promise<ProductWithVariants> {
+    return await db.transaction(async (trx) => {
+      const { id: nuvemshop_id, variants: nuvemshopVariants, ...productData } = data;
+
+      let product: Product | undefined;
+      const existingProduct = await trx(this.productsTable)
+        .where({ nuvemshop_id })
+        .first();
+
+      if (existingProduct) {
+        // Update existing product
+        [product] = await trx(this.productsTable)
+          .where({ id: existingProduct.id })
+          .update({
+            ...productData,
+            updated_at: new Date(),
+          })
+          .returning('*');
+      } else {
+        // Create new product
+        [product] = await trx(this.productsTable)
+          .insert({
+            nuvemshop_id,
+            // Assuming a slug can be generated or is optional for creation
+            // If slug is mandatory and not provided by Nuvemshop, you'll need to generate one here.
+            slug: `${productData.name}-${nuvemshop_id}`, // Placeholder, adjust as needed
+            ...productData,
+          })
+          .returning('*');
+      }
+
+      if (!product) {
+        throw new Error('Failed to create or update product.');
+      }
+
+      const productInternalId = product.id;
+      const existingVariants = await trx(this.variantsTable)
+        .where({ product_id: productInternalId })
+        .whereNull('deleted_at');
+
+      const updatedVariants: ProductVariant[] = [];
+
+      for (const nuvemshopVariant of nuvemshopVariants) {
+        const { id: nuvemshop_variant_id, ...variantData } = nuvemshopVariant;
+        const existingVariant = existingVariants.find(v => v.nuvemshop_variant_id === nuvemshop_variant_id);
+
+        if (existingVariant) {
+          // Update existing variant
+          const [updatedVariant] = await trx(this.variantsTable)
+            .where({ id: existingVariant.id })
+            .update({
+              ...variantData,
+              updated_at: new Date(),
+              deleted_at: null, // Ensure it's not marked as deleted if it reappears
+            })
+            .returning('*');
+          updatedVariants.push(updatedVariant);
+        } else {
+          // Create new variant
+          const [newVariant] = await trx(this.variantsTable)
+            .insert({
+              product_id: productInternalId,
+              nuvemshop_variant_id,
+              ...variantData,
+            })
+            .returning('*');
+          updatedVariants.push(newVariant);
+        }
+      }
+
+      return { ...product, variants: updatedVariants };
     });
   }
 

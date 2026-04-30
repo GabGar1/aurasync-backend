@@ -3,9 +3,11 @@ import {
   type OrderWithItems,
   type CreateOrderInput,
   type UpdateOrderInput,
-  type CreateOrderItemInput
+  type CreateOrderItemInput,
+  type NuvemshopOrderData
 } from '../repositories/order.repository.js';
 import { OrderSchema, type OrderCreate, type OrderUpdate } from '../schemas/order.schema.js';
+import { websocketManager } from '../lib/websocket.js';
 
 export class OrderService {
 
@@ -46,6 +48,10 @@ export class OrderService {
     return await orderRepository.findById(id);
   }
 
+  async findByNuvemshopOrderId(nuvemshopOrderId: string) {
+    return await orderRepository.findByNuvemshopOrderId(nuvemshopOrderId);
+  }
+
   async updateOrder(id: string, orderData: OrderUpdate): Promise<OrderWithItems | null> {
     const validatedData = OrderSchema.update.parse(orderData);
 
@@ -81,6 +87,21 @@ export class OrderService {
     filters: { status?: string; search?: string } = {}
   ): Promise<{ orders: OrderWithItems[]; total: number; page: number; limit: number }> {
     return await orderRepository.findAll(page, limit, filters);
+  }
+
+  async handleNuvemshopWebhook(data: NuvemshopOrderData): Promise<OrderWithItems> {
+    console.log(`Processing webhook for Nuvemshop order ID: ${data.id}`);
+
+    const updatedOrder = await orderRepository.upsertOrderFromNuvemshop(data);
+
+    // After the order is updated, notify all connected clients
+    websocketManager.broadcast({
+      event: 'orders_updated',
+      message: `Order ${updatedOrder.id} was updated. Status: ${updatedOrder.status}`,
+      orderId: updatedOrder.id
+    });
+
+    return updatedOrder;
   }
 }
 

@@ -50,7 +50,7 @@ export const userRoutes: FastifyPluginAsyncZod = async (app) => {
 
         const token = app.jwt.sign(
           { sub: user.id, role: user.role, name: user.first_name },
-          { expiresIn: "7d" }
+          { expiresIn: "2h" }
         );
 
         return reply.status(200).send({ token, user });
@@ -77,7 +77,6 @@ export const userRoutes: FastifyPluginAsyncZod = async (app) => {
       try {
         const { page, limit, role, search } = request.query;
 
-        // O truque Sênior: Só adicionamos a chave no objeto se ela tiver um valor real!
         const filters: { role?: string; search?: string } = {};
         if (role) filters.role = role;
         if (search) filters.search = search;

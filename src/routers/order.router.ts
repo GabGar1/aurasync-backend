@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { orderService } from '../services/order.service.js';
+import { nuvemshopService } from '../services/nuvemshop.service.js';
 
 export const orderRoutes: FastifyPluginAsync = async (fastify) => {
 
@@ -11,6 +12,27 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(400).send({ error: error.message });
     }
   });
+
+  fastify.post('/webhook/nuvemshop', async (request, reply) => {
+    try {
+      // TODO: Add webhook signature verification for security
+      const order = await orderService.handleNuvemshopWebhook(request.body as any);
+      return reply.code(200).send(order);
+    } catch (error: any) {
+      console.error('Nuvemshop order webhook error:', error);
+      return reply.code(400).send({ error: error.message });
+    }
+  });
+
+  fastify.post('/sync/nuvemshop', async (request, reply) => {
+    try {
+      const result = await nuvemshopService.syncOrders();
+      return reply.send(result);
+    } catch (error: any) {
+      return reply.code(400).send({ error: error.message });
+    }
+  });
+
 
   fastify.get('/', async (request, reply) => {
     try {

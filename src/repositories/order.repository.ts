@@ -49,6 +49,24 @@ export interface CreateOrderInput {
   items: CreateOrderItemInput[];
 }
 
+export interface NuvemshopOrderItemData {
+  variant_id: string; // Nuvemshop's variant ID
+  quantity: number;
+  price: number;
+}
+
+export interface NuvemshopOrderData {
+  id: string; // Nuvemshop's order ID
+  customer: {
+    name: string;
+  };
+  status: string;
+  total: number;
+  items: NuvemshopOrderItemData[];
+  // Add other relevant fields from Nuvemshop webhook payload as needed
+}
+
+
 export interface UpdateOrderInput {
   customer_name?: string;
   status?: string;
@@ -88,6 +106,81 @@ export class OrderRepository {
     });
   }
 
+  async upsertOrderFromNuvemshop(data: NuvemshopOrderData): Promise<OrderWithItems> {
+    return await db.transaction(async (trx) => {
+      const { id: nuvemshop_order_id, customer, status, total, items: nuvemshopItems } = data;
+
+      // 1. Find or create the order
+      let order: Order | undefined;
+      const existingOrder = await trx(this.ordersTable)
+        .where({ nuvemshop_order_id })
+        .first();
+
+      if (existingOrder) {
+        [order] = await trx(this.ordersTable)
+          .where({ id: existingOrder.id })
+          .update({
+            customer_name: customer.name,
+            status,
+            total_amount: total,
+            updated_at: new Date(),
+          })
+          .returning('*');
+      } else {
+        [order] = await trx(this.ordersTable)
+          .insert({
+            nuvemshop_order_id,
+            customer_name: customer.name,
+            status,
+            total_amount: total,
+          })
+          .returning('*');
+      }
+
+      if (!order) {
+        throw new Error('Failed to create or update order.');
+      }
+
+      // 2. Process order items
+      const nuvemshopVariantIds = nuvemshopItems.map(item => item.variant_id);
+      const internalVariants = await trx('product_variants')
+        .whereIn('nuvemshop_variant_id', nuvemshopVariantIds)
+        .select('id', 'nuvemshop_variant_id', 'cost_price', 'packaging_cost', 'platform_fee_percent');
+
+      const variantMap = new Map(internalVariants.map(v => [v.nuvemshop_variant_id, v]));
+
+      // Deactivate existing items to handle updates/removals
+      await trx(this.itemsTable)
+        .where({ order_id: order.id })
+        .update({ status: false });
+
+      const processedItems: OrderItem[] = [];
+      for (const nuvemshopItem of nuvemshopItems) {
+        const internalVariant = variantMap.get(nuvemshopItem.variant_id);
+        if (!internalVariant) {
+          console.warn(`Skipping order item because variant with nuvemshop_variant_id ${nuvemshopItem.variant_id} was not found in the database.`);
+          continue;
+        }
+
+        const [item] = await trx(this.itemsTable)
+          .insert({
+            order_id: order.id,
+            variant_id: internalVariant.id,
+            quantity: nuvemshopItem.quantity,
+            unit_price: nuvemshopItem.price,
+            unit_cost: internalVariant.cost_price,
+            unit_packaging_cost: internalVariant.packaging_cost,
+            unit_platform_fee: (nuvemshopItem.price * (internalVariant.platform_fee_percent || 0)) / 100,
+            status: true, // Mark as active
+          })
+          .returning('*');
+        processedItems.push(item);
+      }
+
+      return { ...order, items: processedItems };
+    });
+  }
+
   /**
    * FIND BY ID
    */
@@ -106,6 +199,10 @@ export class OrderRepository {
       ...order,
       items
     };
+  }
+
+  async findByNuvemshopOrderId(nuvemshopOrderId: string): Promise<Order | null> {
+    return db(this.ordersTable).where({ nuvemshop_order_id: nuvemshopOrderId }).first();
   }
 
   /**
