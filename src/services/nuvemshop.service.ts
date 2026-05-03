@@ -2,6 +2,7 @@ import axios from 'axios';
 import { productService } from './product.service.js';
 import { orderService } from "./order.service.js";
 import { db } from '../lib/db.js';
+import { websocketManager } from '../lib/websocket.js';
 
 class NuvemshopService {
   private get baseUrl() {
@@ -19,7 +20,7 @@ class NuvemshopService {
   private mapNuvemshopStatus(nuvemStatus: string): string {
     const statusMap: { [key: string]: string } = {
       'open': 'PENDING',
-      'closed': 'DELIVERED', // Assuming closed means delivered
+      'closed': 'DELIVERED',
       'cancelled': 'CANCELED',
       'paid': 'PAID',
       'shipped': 'SHIPPED',
@@ -27,62 +28,66 @@ class NuvemshopService {
     return statusMap[nuvemStatus] || 'PENDING';
   }
 
-
   async syncProducts() {
     console.log('Starting full product synchronization with Nuvemshop...');
-
     try {
+      const allNuvemProducts = [];
       let page = 1;
-      let hasMore = true;
-      let importedCount = 0;
       const perPage = 200;
+      let hasMore = true;
 
       while (hasMore) {
         console.log(`Fetching product page ${page}...`);
-
-        const response = await axios.get(`${this.baseUrl}/products`, {
-          headers: this.headers,
-          params: {
-            page: page,
-            per_page: perPage
-          }
-        });
-
-        const nuvemProducts = response.data;
-
-        if (!nuvemProducts || nuvemProducts.length === 0) {
-          hasMore = false;
-          break;
-        }
-
-        for (const np of nuvemProducts) {
-          // Use upsert to handle both new products and updates to existing ones
-          await productService.upsertProductFromNuvemshop({
-            id: np.id.toString(),
-            name: np.name?.pt || 'Produto sem nome',
-            category: np.categories?.[0]?.name?.pt || 'Geral',
-            is_active: np.published,
-            variants: np.variants.map((nv: any) => ({
-              id: nv.id.toString(),
-              sku: nv.sku || `SKU-${nv.id}`,
-              name: nv.values?.map((v: any) => v.pt).join(' / ') || 'Padrão',
-              price: parseFloat(nv.price || '0'),
-              cost_price: parseFloat(nv.cost || '0'),
-              stock_quantity: nv.stock || 0
-            }))
+        try {
+          const response = await axios.get(`${this.baseUrl}/products`, {
+            headers: this.headers,
+            params: { page, per_page: perPage },
           });
-          importedCount++;
-        }
-
-        if (nuvemProducts.length < perPage) {
-          hasMore = false;
-        } else {
-          page++;
+          const nuvemProducts = response.data;
+          if (nuvemProducts.length > 0) {
+            allNuvemProducts.push(...nuvemProducts);
+            page++;
+          } else {
+            hasMore = false;
+          }
+        } catch (error: any) {
+          if (error.response && error.response.status === 404) {
+            console.log('Reached the last page of products.');
+            hasMore = false;
+          } else {
+            throw error;
+          }
         }
       }
 
-      console.log(`Synchronization complete! ${importedCount} products processed.`);
-      return { success: true, processed: importedCount };
+      console.log(`Found ${allNuvemProducts.length} total products in Nuvemshop. Processing...`);
+
+      const upsertPromises = allNuvemProducts.map(np => {
+        const productData = {
+          id: np.id.toString(),
+          name: np.name?.pt || 'Produto sem nome',
+          category: np.categories?.[0]?.name?.pt || 'Geral',
+          is_active: np.published,
+          variants: np.variants.map((nv: any) => ({
+            id: nv.id.toString(),
+            sku: nv.sku || null,
+            price: parseFloat(nv.price || '0'),
+            stock_quantity: nv.stock === null ? 0 : nv.stock,
+            cost_price: parseFloat(nv.cost || '0'),
+          })),
+        };
+        return productService.upsertProductFromNuvemshop(productData as any);
+      });
+
+      const results = await Promise.all(upsertPromises);
+
+      websocketManager.broadcast({
+        event: 'products_updated',
+        message: `Bulk product sync complete. ${results.length} products processed.`,
+      });
+
+      console.log(`Product synchronization complete! ${results.length} products processed.`);
+      return { success: true, processed: results.length };
 
     } catch (error: any) {
       console.error('Error syncing products with Nuvemshop:', error.response?.data || error.message);
@@ -93,50 +98,62 @@ class NuvemshopService {
   async syncOrders() {
     console.log('Starting order synchronization with Nuvemshop...');
     try {
+      const allNuvemOrders = [];
       let page = 1;
-      let hasMore = true;
-      let processedCount = 0;
       const perPage = 50;
+      let hasMore = true;
 
       while (hasMore) {
         console.log(`Fetching order page ${page}...`);
-        const response = await axios.get(`${this.baseUrl}/orders`, {
-          headers: this.headers,
-          params: { page, per_page: perPage, status: 'any' }
-        });
-
-        const nuvemOrders = response.data;
-        if (!nuvemOrders || nuvemOrders.length === 0) {
-          hasMore = false;
-          break;
-        }
-
-        for (const nuvemOrder of nuvemOrders) {
-          // Use upsert to handle both new orders and updates to existing ones
-          await orderService.handleNuvemshopWebhook({
-            id: nuvemOrder.id.toString(),
-            customer: {
-              name: nuvemOrder.customer?.name || 'Customer Not Available',
-            },
-            status: nuvemOrder.status,
-            total: parseFloat(nuvemOrder.total),
-            items: nuvemOrder.products.map((item: any) => ({
-              variant_id: item.variant_id.toString(),
-              quantity: item.quantity,
-              price: parseFloat(item.price)
-            }))
+        try {
+          const response = await axios.get(`${this.baseUrl}/orders`, {
+            headers: this.headers,
+            params: { page, per_page: perPage, status: 'any' },
           });
-          processedCount++;
-        }
-
-        if (nuvemOrders.length < perPage) {
-          hasMore = false;
-        } else {
-          page++;
+          const nuvemOrders = response.data;
+          if (nuvemOrders.length > 0) {
+            allNuvemOrders.push(...nuvemOrders);
+            page++;
+          } else {
+            hasMore = false;
+          }
+        } catch (error: any) {
+          if (error.response && error.response.status === 404) {
+            console.log('Reached the last page of orders.');
+            hasMore = false;
+          } else {
+            throw error;
+          }
         }
       }
-      console.log(`Order synchronization complete! ${processedCount} orders processed.`);
-      return { success: true, processed: processedCount };
+
+      console.log(`Found ${allNuvemOrders.length} total orders in Nuvemshop. Processing...`);
+
+      const upsertPromises = allNuvemOrders.map(nuvemOrder => {
+        const orderData = {
+          id: nuvemOrder.id.toString(),
+          customer: { name: nuvemOrder.customer?.name || 'Customer Not Available' },
+          status: this.mapNuvemshopStatus(nuvemOrder.status),
+          total: parseFloat(nuvemOrder.total),
+          items: nuvemOrder.products.map((item: any) => ({
+            variant_id: item.variant_id.toString(),
+            quantity: item.quantity,
+            price: parseFloat(item.price)
+          })),
+        };
+        return orderService.upsertOrderFromNuvemshop(orderData as any);
+      });
+
+      const results = await Promise.all(upsertPromises);
+
+      websocketManager.broadcast({
+        event: 'orders_updated',
+        message: `Bulk order sync complete. ${results.length} orders processed.`,
+      });
+
+      console.log(`Order synchronization complete! ${results.length} orders processed.`);
+      return { success: true, processed: results.length };
+
     } catch (error: any) {
       console.error('Error syncing orders with Nuvemshop:', error.response?.data || error.message);
       throw new Error('Failed to integrate orders with Nuvemshop');

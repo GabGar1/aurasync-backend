@@ -92,7 +92,7 @@ export class OrderService {
   async handleNuvemshopWebhook(data: NuvemshopOrderData): Promise<OrderWithItems> {
     console.log(`Processing webhook for Nuvemshop order ID: ${data.id}`);
 
-    const updatedOrder = await orderRepository.upsertOrderFromNuvemshop(data);
+    const updatedOrder = await this.upsertOrderFromNuvemshop(data);
 
     // After the order is updated, notify all connected clients
     websocketManager.broadcast({
@@ -102,6 +102,10 @@ export class OrderService {
     });
 
     return updatedOrder;
+  }
+
+  async upsertOrderFromNuvemshop(data: NuvemshopOrderData): Promise<OrderWithItems> {
+    return await orderRepository.upsertOrderFromNuvemshop(data);
   }
 }
 

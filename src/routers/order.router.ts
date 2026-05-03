@@ -24,13 +24,14 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
-  fastify.post('/sync/nuvemshop', async (request, reply) => {
-    try {
-      const result = await nuvemshopService.syncOrders();
-      return reply.send(result);
-    } catch (error: any) {
-      return reply.code(400).send({ error: error.message });
-    }
+  fastify.post('/sync/nuvemshop', (request, reply) => {
+    // Don't await this. This lets the request finish immediately.
+    nuvemshopService.syncOrders().catch(error => {
+      console.error("Error during background sync:", error);
+    });
+
+    // Immediately respond to the client.
+    reply.code(202).send({ message: "Synchronization process started in the background." });
   });
 
 
