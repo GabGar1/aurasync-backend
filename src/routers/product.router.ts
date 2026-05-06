@@ -28,17 +28,6 @@ export const productRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
-  fastify.post('/webhook/nuvemshop', async (request, reply) => {
-    try {
-      // TODO: Add webhook signature verification for security
-      const product = await productService.handleNuvemshopWebhook(request.body as any);
-      return reply.code(200).send(product);
-    } catch (error: any) {
-      console.error('Nuvemshop webhook error:', error);
-      return reply.code(400).send({ error: error.message });
-    }
-  });
-
 
   fastify.get('/', async (request, reply) => {
     try {

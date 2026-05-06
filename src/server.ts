@@ -8,6 +8,8 @@ import {userRoutes} from "./routers/user.router";
 import { productRoutes } from './routers/product.router.js';
 import {orderRoutes} from "./routers/order.router";
 import {inventoryRoutes} from "./routers/inventory.router";
+import { webhookRoutes } from './routers/webhook.router.js';
+import fastifyRawBody from 'fastify-raw-body'; // Importar o plugin
 import {fastifySwagger} from "@fastify/swagger";
 import {fastifySwaggerUi} from "@fastify/swagger-ui";
 import {fastifyCors} from "@fastify/cors";
@@ -21,12 +23,20 @@ declare module "fastify" {
 const app = Fastify({ logger: true });
 
 app.register(fastifyCors, {
-  origin: '*',
+  origin: process.env.NODE_ENV === 'production'
+    ? ['https://lamata.tec.br']
+    : '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE']
 });
 
 app.setValidatorCompiler(validatorCompiler);
 app.setSerializerCompiler(serializerCompiler);
+
+app.register(fastifyRawBody, {
+  field: 'rawBody',
+  global: false, // Aplicar apenas em rotas específicas
+  encoding: 'utf8',
+});
 
 app.register(fastifyJwt, {
   secret: process.env.JWT_SECRET as string,
@@ -68,6 +78,7 @@ app.register(userRoutes, { prefix: "/api" });
 app.register(productRoutes, { prefix: "/api/products" });
 app.register(orderRoutes, { prefix: '/api/orders' });
 app.register(inventoryRoutes, { prefix: '/api/inventory' });
+app.register(webhookRoutes, { prefix: '/api/webhooks' });
 
 
 const start = async () => {

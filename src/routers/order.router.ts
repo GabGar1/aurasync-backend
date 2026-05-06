@@ -13,17 +13,6 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
-  fastify.post('/webhook/nuvemshop', async (request, reply) => {
-    try {
-      // TODO: Add webhook signature verification for security
-      const order = await orderService.handleNuvemshopWebhook(request.body as any);
-      return reply.code(200).send(order);
-    } catch (error: any) {
-      console.error('Nuvemshop order webhook error:', error);
-      return reply.code(400).send({ error: error.message });
-    }
-  });
-
   fastify.post('/sync/nuvemshop', (request, reply) => {
     // Don't await this. This lets the request finish immediately.
     nuvemshopService.syncOrders().catch(error => {
