@@ -4,6 +4,11 @@ import { orderService } from "./order.service.js";
 import { db } from '../lib/db.js';
 import { websocketManager } from '../lib/websocket.js';
 
+console.log('=== [AuraSync Debug] Verificando Variáveis de Ambiente ===');
+console.log('STORE_ID:', process.env.NUVEMSHOP_STORE_ID);
+console.log('TOKEN EXISTE?:', !!process.env.NUVEMSHOP_ACCESS_TOKEN);
+console.log('========================================================');
+
 class NuvemshopService {
   private get baseUrl() {
     return `https://api.tiendanube.com/v1/${process.env.NUVEMSHOP_STORE_ID}`;
@@ -11,7 +16,7 @@ class NuvemshopService {
 
   private get headers() {
     return {
-      'Authentication': `bearer ${process.env.NUVEMSHOP_ACCESS_TOKEN}`,
+      'Authorization': `bearer ${process.env.NUVEMSHOP_ACCESS_TOKEN}`,
       'User-Agent': 'AuraSync App (utopiapedras@gmail.com)',
       'Content-Type': 'application/json'
     };

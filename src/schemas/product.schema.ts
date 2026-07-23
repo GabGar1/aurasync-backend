@@ -6,26 +6,27 @@ const VariantBaseSchema = z.object({
   nuvemshop_variant_id: z.string().nullable().optional(),
   sku: z.string().nullable().optional(),
   name: z.string().nullable().optional(),
-  price: z.number().min(0, 'Price cannot be negative'),
-  stock_quantity: z.number().int().min(0, 'Stock cannot be negative'),
-  cost_price: z.number().min(0).default(0),
-  packaging_cost: z.number().min(0).default(0),
-  platform_fee_percent: z.number().min(0).default(0),
-  fixed_fee: z.number().min(0).default(0),
+  price: z.int().min(0, 'Price cannot be negative'),
+  stock_quantity: z.int().min(0, 'Stock cannot be negative'),
+  cost_price: z.int().min(0).default(0),
+  packaging_cost: z.int().min(0).default(0),
+  platform_fee_percent: z.int().min(0).default(0),
+  fixed_fee: z.int().min(0).default(0),
   created_at: z.date().optional(),
   updated_at: z.date().optional(),
+  test: z.int()
 });
 
 const VariantCreateSchema = z.object({
   nuvemshop_variant_id: z.string().optional(),
   sku: z.string().optional(),
   name: z.string().optional(),
-  price: z.number().min(0, 'Price is required and cannot be negative'),
-  stock_quantity: z.number().int().min(0, 'Stock quantity is required'),
-  cost_price: z.number().min(0).optional(),
-  packaging_cost: z.number().min(0).optional(),
-  platform_fee_percent: z.number().min(0).optional(),
-  fixed_fee: z.number().min(0).optional(),
+  price: z.int().min(0, 'Price is required and cannot be negative'),
+  stock_quantity: z.int().int().min(0, 'Stock quantity is required'),
+  cost_price: z.int().min(0).optional(),
+  packaging_cost: z.int().min(0).optional(),
+  platform_fee_percent: z.int().min(0).optional(),
+  fixed_fee: z.int().min(0).optional(),
 });
 
 
@@ -81,9 +82,9 @@ export const ProductSchema = {
       updated_at: z.date(),
       variants: z.array(VariantBaseSchema),
     })),
-    total: z.number(),
-    page: z.number(),
-    limit: z.number(),
+    total: z.int(),
+    page: z.int(),
+    limit: z.int(),
   }),
 };
 

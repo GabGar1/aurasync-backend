@@ -1,6 +1,6 @@
+import 'dotenv/config';
 import Fastify, {type FastifyReply, type FastifyRequest} from "fastify";
 import {jsonSchemaTransform, serializerCompiler, validatorCompiler} from "fastify-type-provider-zod";
-import "dotenv/config";
 import { websocketManager } from "./lib/websocket.js";
 import { WebSocketServer } from 'ws';
 import fastifyJwt from "@fastify/jwt";
@@ -9,10 +9,10 @@ import { productRoutes } from './routers/product.router.js';
 import {orderRoutes} from "./routers/order.router";
 import {inventoryRoutes} from "./routers/inventory.router";
 import { webhookRoutes } from './routers/webhook.router.js';
-import fastifyRawBody from 'fastify-raw-body'; // Importar o plugin
 import {fastifySwagger} from "@fastify/swagger";
 import {fastifySwaggerUi} from "@fastify/swagger-ui";
 import {fastifyCors} from "@fastify/cors";
+import {fastifyRawBody} from "fastify-raw-body";
 
 declare module "fastify" {
   export interface FastifyInstance {
@@ -26,7 +26,9 @@ app.register(fastifyCors, {
   origin: process.env.NODE_ENV === 'production'
     ? ['https://lamata.tec.br']
     : '*',
-  methods: ['GET', 'POST', 'PUT', 'DELETE']
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  optionsSuccessStatus: 204
 });
 
 app.setValidatorCompiler(validatorCompiler);
@@ -34,8 +36,9 @@ app.setSerializerCompiler(serializerCompiler);
 
 app.register(fastifyRawBody, {
   field: 'rawBody',
-  global: false, // Aplicar apenas em rotas específicas
+  global: false,
   encoding: 'utf8',
+  routes: ['/api/webhooks/nuvemshop']
 });
 
 app.register(fastifyJwt, {

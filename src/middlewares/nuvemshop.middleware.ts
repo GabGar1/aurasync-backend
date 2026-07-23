@@ -1,8 +1,6 @@
 import type { FastifyRequest, FastifyReply, DoneFuncWithErr } from 'fastify';
 import crypto from 'crypto';
 
-// Este middleware requer o corpo bruto (raw body) da requisição.
-// Você DEVE registrar o plugin 'fastify-raw-body' em seu server.ts para que funcione corretamente.
 export const verifyNuvemshopWebhook = (req: FastifyRequest, reply: FastifyReply, done: DoneFuncWithErr) => {
   const nuvemshopSignature = req.headers['x-webhook-signature'] as string;
   const secret = process.env.NUVEMSHOP_WEBHOOK_SECRET;
@@ -10,7 +8,7 @@ export const verifyNuvemshopWebhook = (req: FastifyRequest, reply: FastifyReply,
   if (!secret) {
     console.error('NUVEMSHOP_WEBHOOK_SECRET não está configurado no ambiente.');
     reply.status(500).send({ error: 'Webhook secret not configured on server.' });
-    return; // Retorna para encerrar a execução do middleware
+    return;
   }
 
   if (!nuvemshopSignature) {
@@ -18,9 +16,7 @@ export const verifyNuvemshopWebhook = (req: FastifyRequest, reply: FastifyReply,
     reply.status(401).send({ error: 'Missing webhook signature.' });
     return;
   }
-  
-  // O corpo bruto é necessário para a verificação HMAC.
-  // Assumimos que 'fastify-raw-body' foi registrado e anexou o rawBody à requisição.
+
   const payload = (req as any).rawBody;
 
   if (!payload) {
@@ -47,5 +43,5 @@ export const verifyNuvemshopWebhook = (req: FastifyRequest, reply: FastifyReply,
     return;
   }
 
-  done(); // Prossegue para o manipulador de rota
+  done();
 };

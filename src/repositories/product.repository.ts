@@ -88,15 +88,15 @@ export class ProductRepository {
 
   async findById(id: string): Promise<ProductWithVariants | null> {
     const product = await db(this.productsTable)
-      .where({ id })
-      .whereNull('deleted_at')
-      .first();
+        .where({id})
+        .whereNull('deleted_at')
+        .first();
 
     if (!product) return null;
 
     const variants = await db(this.variantsTable)
-      .where({ product_id: id })
-      .whereNull('deleted_at');
+        .where({product_id: id})
+        .whereNull('deleted_at');
 
     return {
       ...product,
@@ -106,15 +106,15 @@ export class ProductRepository {
 
   async findBySlug(slug: string): Promise<ProductWithVariants | null> {
     const product = await db(this.productsTable)
-      .where({ slug })
-      .whereNull('deleted_at')
-      .first();
+        .where({slug})
+        .whereNull('deleted_at')
+        .first();
 
     if (!product) return null;
 
     const variants = await db(this.variantsTable)
-      .where({ product_id: product.id })
-      .whereNull('deleted_at');
+        .where({product_id: product.id})
+        .whereNull('deleted_at');
 
     return {
       ...product,
@@ -123,12 +123,12 @@ export class ProductRepository {
   }
 
   async create(data: CreateProductInput): Promise<ProductWithVariants> {
-    const { variants, ...productData } = data;
+    const {variants, ...productData} = data;
 
     return await db.transaction(async (trx) => {
       const [product] = await trx(this.productsTable)
-        .insert(productData)
-        .returning('*');
+          .insert(productData)
+          .returning('*');
 
       const variantsToInsert = variants.map(variant => ({
         ...variant,
@@ -136,8 +136,8 @@ export class ProductRepository {
       }));
 
       const insertedVariants = await trx(this.variantsTable)
-        .insert(variantsToInsert)
-        .returning('*');
+          .insert(variantsToInsert)
+          .returning('*');
 
       return {
         ...product,
@@ -148,13 +148,13 @@ export class ProductRepository {
 
   async update(id: string, data: UpdateProductInput): Promise<ProductWithVariants | null> {
     const [product] = await db(this.productsTable)
-      .where({ id })
-      .whereNull('deleted_at')
-      .update({
-        ...data,
-        updated_at: new Date(),
-      })
-      .returning('*');
+        .where({id})
+        .whereNull('deleted_at')
+        .update({
+          ...data,
+          updated_at: new Date(),
+        })
+        .returning('*');
 
     if (!product) return null;
 
@@ -164,21 +164,21 @@ export class ProductRepository {
   async delete(id: string): Promise<boolean> {
     return await db.transaction(async (trx) => {
       await trx(this.variantsTable)
-        .where({ product_id: id })
-        .whereNull('deleted_at')
-        .update({
-          deleted_at: new Date(),
-          updated_at: new Date(),
-        });
+          .where({product_id: id})
+          .whereNull('deleted_at')
+          .update({
+            deleted_at: new Date(),
+            updated_at: new Date(),
+          });
 
       const result = await trx(this.productsTable)
-        .where({ id })
-        .whereNull('deleted_at')
-        .update({
-          deleted_at: new Date(),
-          updated_at: new Date(),
-          is_active: false,
-        });
+          .where({id})
+          .whereNull('deleted_at')
+          .update({
+            deleted_at: new Date(),
+            updated_at: new Date(),
+            is_active: false,
+          });
 
       return result > 0;
     });
@@ -186,33 +186,33 @@ export class ProductRepository {
 
   async upsertProductFromNuvemshop(data: NuvemshopProductData): Promise<ProductWithVariants> {
     return await db.transaction(async (trx) => {
-      const { id: nuvemshop_id, variants: nuvemshopVariants, ...productData } = data;
+      const {id: nuvemshop_id, variants: nuvemshopVariants, ...productData} = data;
 
       let product: Product | undefined;
       const existingProduct = await trx(this.productsTable)
-        .where({ nuvemshop_id })
-        .first();
+          .where({nuvemshop_id})
+          .first();
 
       if (existingProduct) {
         // Update existing product
         [product] = await trx(this.productsTable)
-          .where({ id: existingProduct.id })
-          .update({
-            ...productData,
-            updated_at: new Date(),
-          })
-          .returning('*');
+            .where({id: existingProduct.id})
+            .update({
+              ...productData,
+              updated_at: new Date(),
+            })
+            .returning('*');
       } else {
         // Create new product
         [product] = await trx(this.productsTable)
-          .insert({
-            nuvemshop_id,
-            // Assuming a slug can be generated or is optional for creation
-            // If slug is mandatory and not provided by Nuvemshop, you'll need to generate one here.
-            slug: `${productData.name}-${nuvemshop_id}`, // Placeholder, adjust as needed
-            ...productData,
-          })
-          .returning('*');
+            .insert({
+              nuvemshop_id,
+              // Assuming a slug can be generated or is optional for creation
+              // If slug is mandatory and not provided by Nuvemshop, you'll need to generate one here.
+              slug: `${productData.name}-${nuvemshop_id}`, // Placeholder, adjust as needed
+              ...productData,
+            })
+            .returning('*');
       }
 
       if (!product) {
@@ -221,59 +221,58 @@ export class ProductRepository {
 
       const productInternalId = product.id;
       const existingVariants = await trx(this.variantsTable)
-        .where({ product_id: productInternalId })
-        .whereNull('deleted_at');
+          .where({product_id: productInternalId})
+          .whereNull('deleted_at');
 
       const updatedVariants: ProductVariant[] = [];
 
       for (const nuvemshopVariant of nuvemshopVariants) {
-        const { id: nuvemshop_variant_id, ...variantData } = nuvemshopVariant;
+        const {id: nuvemshop_variant_id, ...variantData} = nuvemshopVariant;
         const existingVariant = existingVariants.find(v => v.nuvemshop_variant_id === nuvemshop_variant_id);
 
         if (existingVariant) {
           // Update existing variant
           const [updatedVariant] = await trx(this.variantsTable)
-            .where({ id: existingVariant.id })
-            .update({
-              ...variantData,
-              updated_at: new Date(),
-              deleted_at: null, // Ensure it's not marked as deleted if it reappears
-            })
-            .returning('*');
+              .where({id: existingVariant.id})
+              .update({
+                ...variantData,
+                updated_at: new Date(),
+                deleted_at: null, // Ensure it's not marked as deleted if it reappears
+              })
+              .returning('*');
           updatedVariants.push(updatedVariant);
         } else {
           // Create new variant
           const [newVariant] = await trx(this.variantsTable)
-            .insert({
-              product_id: productInternalId,
-              nuvemshop_variant_id,
-              ...variantData,
-            })
-            .returning('*');
+              .insert({
+                product_id: productInternalId,
+                nuvemshop_variant_id,
+                ...variantData,
+              })
+              .returning('*');
           updatedVariants.push(newVariant);
         }
       }
 
-      return { ...product, variants: updatedVariants };
+      return {...product, variants: updatedVariants};
     });
   }
 
   async findByNuvemshopId(nuvemshopId: string) {
-    return await db(this.productsTable).where({ nuvemshop_id: nuvemshopId }).first();
+    return await db(this.productsTable).where({nuvemshop_id: nuvemshopId}).first();
   }
 
   async findAll(
-    page: number = 1,
-    limit: number = 10,
-    filters: {
-      search?: string;
-      category?: string;
-      is_active?: boolean;
-    } = {}
+      page: number = 1,
+      limit: number = 10,
+      filters: {
+        search?: string;
+        category?: string;
+        is_active?: boolean;
+      } = {}
   ): Promise<{ products: ProductWithVariants[]; total: number; page: number; limit: number }> {
-    let query = db(this.productsTable)
-      .whereNull('deleted_at')
-      .orderBy('created_at', 'desc');
+
+    let query = db(this.productsTable).whereNull('deleted_at');
 
     if (filters.category) {
       query = query.where('category', filters.category);
@@ -286,25 +285,29 @@ export class ProductRepository {
     if (filters.search) {
       query = query.where((builder: Knex.QueryBuilder) => {
         builder.where('name', 'ilike', `%${filters.search}%`)
-          .orWhere('slug', 'ilike', `%${filters.search}%`)
-          .orWhere('nuvemshop_id', 'ilike', `%${filters.search}%`);
+            .orWhere('slug', 'ilike', `%${filters.search}%`)
+            .orWhere('nuvemshop_id', 'ilike', `%${filters.search}%`);
       });
     }
 
-    const totalQuery = query.clone().clearOrder().clearSelect().count('* as count');
-    const totalResult = await totalQuery.first();
+    const totalResult = await query.clone().count('* as count').first();
     const total = Number(totalResult?.count || 0);
 
     const offset = (page - 1) * limit;
-    const baseProducts = await query.limit(limit).offset(offset);
+    const baseProducts = await query
+        .clone()
+        .orderBy('is_active', 'desc')
+        .orderBy('created_at', 'desc')
+        .limit(limit)
+        .offset(offset);
 
     const products = await Promise.all(
-      baseProducts.map(async (product) => {
-        const variants = await db(this.variantsTable)
-          .where({ product_id: product.id })
-          .whereNull('deleted_at');
-        return { ...product, variants };
-      })
+        baseProducts.map(async (product) => {
+          const variants = await db(this.variantsTable)
+              .where({product_id: product.id})
+              .whereNull('deleted_at');
+          return {...product, variants};
+        })
     );
 
     return {
@@ -313,7 +316,7 @@ export class ProductRepository {
       page,
       limit,
     };
-  }
+  };
 }
 
 export const productRepository = new ProductRepository();
