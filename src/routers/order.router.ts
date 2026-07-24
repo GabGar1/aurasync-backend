@@ -1,10 +1,11 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { orderService } from '../services/order.service.js';
 import { nuvemshopService } from '../services/nuvemshop.service.js';
+import { requireRole } from "../middlewares/role.middleware.js";
 
 export const orderRoutes: FastifyPluginAsync = async (fastify) => {
 
-  fastify.post('/', async (request, reply) => {
+  fastify.post('/', { onRequest: [fastify.authenticate], preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])] }, async (request, reply) => {
     try {
       const order = await orderService.createOrder(request.body as any);
       return reply.code(201).send(order);
@@ -13,7 +14,7 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
-  fastify.post('/sync/nuvemshop', (request, reply) => {
+  fastify.post('/sync/nuvemshop', { onRequest: [fastify.authenticate] }, (request, reply) => {
     // Don't await this. This lets the request finish immediately.
     nuvemshopService.syncOrders().catch(error => {
       console.error("Error during background sync:", error);
@@ -24,7 +25,7 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
 
-  fastify.get('/', async (request, reply) => {
+  fastify.get('/', { onRequest: [fastify.authenticate] }, async (request, reply) => {
     try {
       const { page, limit, status, search } = request.query as any;
 
@@ -44,7 +45,7 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
-  fastify.get('/:id', async (request, reply) => {
+  fastify.get('/:id', { onRequest: [fastify.authenticate] }, async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
       const order = await orderService.getOrderById(id);
@@ -57,7 +58,7 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
-  fastify.put('/:id', async (request, reply) => {
+  fastify.put('/:id', { onRequest: [fastify.authenticate], preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])] }, async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
       const order = await orderService.updateOrder(id, request.body as any);
@@ -70,7 +71,7 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
-  fastify.delete('/:id', async (request, reply) => {
+  fastify.delete('/:id', { onRequest: [fastify.authenticate], preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])] }, async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
       await orderService.deleteOrder(id);
