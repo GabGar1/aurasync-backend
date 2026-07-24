@@ -1,9 +1,10 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { inventoryService } from '../services/inventory.service.js';
+import { requireRole } from "../middlewares/role.middleware.js";
 
 export const inventoryRoutes: FastifyPluginAsync = async (fastify) => {
 
-  fastify.post('/', async (request, reply) => {
+  fastify.post('/', { onRequest: [fastify.authenticate], preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])] }, async (request, reply) => {
     try {
       const transaction = await inventoryService.addTransaction(request.body as any);
       return reply.code(201).send(transaction);
@@ -12,7 +13,7 @@ export const inventoryRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
-  fastify.get('/variant/:variantId', async (request, reply) => {
+  fastify.get('/variant/:variantId', { onRequest: [fastify.authenticate] }, async (request, reply) => {
     try {
       const { variantId } = request.params as { variantId: string };
       const history = await inventoryService.getVariantHistory(variantId);
