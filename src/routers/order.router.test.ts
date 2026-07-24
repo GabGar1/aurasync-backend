@@ -49,6 +49,14 @@ describe("Order Router Auth", () => {
       variants: [{ price: 100, stock_quantity: 50 }],
     });
     testVariantId = product.variants[0]!.id;
+
+    const orderRes = await app.inject({
+      method: "POST",
+      url: "/api/orders",
+      headers: { authorization: `Bearer ${adminToken}` },
+      body: { customer_name: "Seed Order", items: [{ variant_id: testVariantId, quantity: 1, unit_price: 100 }] },
+    });
+    testOrderId = orderRes.json().id;
   });
 
   after(async () => {
@@ -81,11 +89,19 @@ describe("Order Router Auth", () => {
         method: "POST",
         url: "/api/orders",
         headers: { authorization: `Bearer ${adminToken}` },
-        body: { customer_name: "Test Admin", items: [{ variant_id: testVariantId, quantity: 1, unit_price: 100 }] },
+        body: { customer_name: "Another Order", items: [{ variant_id: testVariantId, quantity: 1, unit_price: 100 }] },
       });
       assert.strictEqual(res.statusCode, 201);
-      const body = res.json();
-      testOrderId = body.id;
+    });
+  });
+
+  describe("POST /sync/nuvemshop — sync orders (401 only, skips real API)", () => {
+    it("should return 401 without token", async () => {
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/orders/sync/nuvemshop",
+      });
+      assert.strictEqual(res.statusCode, 401);
     });
   });
 
