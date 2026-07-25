@@ -12,6 +12,10 @@ const VariantBaseSchema = z.object({
   packaging_cost: z.number().min(0).default(0),
   platform_fee_percent: z.number().min(0).default(0),
   fixed_fee: z.number().min(0).default(0),
+  weight: z.number().nullable().optional(),
+  height: z.number().nullable().optional(),
+  width: z.number().nullable().optional(),
+  depth: z.number().nullable().optional(),
   created_at: z.date().optional(),
   updated_at: z.date().optional(),
 });
@@ -26,6 +30,10 @@ const VariantCreateSchema = z.object({
   packaging_cost: z.number().min(0).optional(),
   platform_fee_percent: z.number().min(0).optional(),
   fixed_fee: z.number().min(0).optional(),
+  weight: z.number().min(0).optional(),
+  height: z.number().min(0).optional(),
+  width: z.number().min(0).optional(),
+  depth: z.number().min(0).optional(),
 });
 
 
