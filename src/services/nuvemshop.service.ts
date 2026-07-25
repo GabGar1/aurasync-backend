@@ -79,6 +79,10 @@ class NuvemshopService {
             price: parseFloat(nv.price || '0'),
             stock_quantity: nv.stock === null ? 0 : nv.stock,
             cost_price: parseFloat(nv.cost || '0'),
+            weight: nv.weight ? parseFloat(nv.weight) : undefined,
+            height: nv.height ? parseFloat(nv.height) : undefined,
+            width: nv.width ? parseFloat(nv.width) : undefined,
+            depth: nv.depth ? parseFloat(nv.depth) : undefined,
           })),
         };
         return productService.upsertProductFromNuvemshop(productData as any);
@@ -137,7 +141,7 @@ class NuvemshopService {
       const upsertPromises = allNuvemOrders.map(nuvemOrder => {
         const orderData = {
           id: nuvemOrder.id.toString(),
-          customer: { name: nuvemOrder.customer?.name || 'Customer Not Available' },
+          customer: { name: nuvemOrder.customer?.name || nuvemOrder.contact_name || 'Customer Not Available' },
           status: this.mapNuvemshopStatus(nuvemOrder.status),
           total: parseFloat(nuvemOrder.total),
           items: nuvemOrder.products.map((item: any) => ({
@@ -145,6 +149,20 @@ class NuvemshopService {
             quantity: item.quantity,
             price: parseFloat(item.price)
           })),
+          discount: nuvemOrder.discount,
+          shipping_cost_customer: nuvemOrder.shipping_cost_customer,
+          shipping_cost_owner: nuvemOrder.shipping_cost_owner,
+          paid_at: nuvemOrder.paid_at,
+          shipped_at: nuvemOrder.shipped_at,
+          completed_at: nuvemOrder.completed_at,
+          cancelled_at: nuvemOrder.cancelled_at,
+          payment_details: nuvemOrder.payment_details,
+          gateway: nuvemOrder.gateway,
+          shipping_address: nuvemOrder.shipping_address,
+          shipping_carrier_name: nuvemOrder.shipping_carrier_name,
+          customer_visit: nuvemOrder.customer_visit,
+          storefront: nuvemOrder.storefront,
+          contact_email: nuvemOrder.contact_email,
         };
         return orderService.upsertOrderFromNuvemshop(orderData as any);
       });
