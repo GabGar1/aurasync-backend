@@ -235,4 +235,148 @@ describe("OrderService Integration Tests", () => {
       await db("products").where({ slug: "concurrent-stock-test" }).del();
     });
   });
+
+  describe("6. Nuvemshop Order Upsert Enrichment", () => {
+    it("should store all enriched fields from a full Nuvemshop order payload", async () => {
+      const product = await productService.createProduct({
+        slug: "enrich-upsert-test",
+        name: "Enriched Upsert Product",
+        variants: [
+          {
+            sku: "ENRICH-001",
+            price: 49.90,
+            stock_quantity: 100,
+            nuvemshop_variant_id: "999888777",
+          },
+        ],
+      });
+      const nuvemshopVariantId = product.variants[0]!.nuvemshop_variant_id!;
+
+      const nuvemshopOrderData = {
+        id: "1969442650",
+        customer: { name: "Aline Costa Fernandes" },
+        status: "PAID",
+        total: 125.66,
+        items: [
+          { variant_id: nuvemshopVariantId, quantity: 2, price: 49.90 },
+        ],
+        discount: "49.40",
+        shipping_cost_customer: "25.36",
+        shipping_cost_owner: "25.36",
+        paid_at: "2026-05-13T17:49:03+0000",
+        shipped_at: null,
+        completed_at: {
+          date: "2026-05-13 17:49:00.000000",
+          timezone_type: 3,
+          timezone: "UTC",
+        },
+        cancelled_at: null,
+        payment_details: {
+          method: "credit_card",
+          credit_card_company: "elo",
+          installments: 3,
+        },
+        gateway: "nuvem-pago",
+        shipping_address: {
+          city: "Belo Horizonte",
+          province: "Minas Gerais",
+        },
+        shipping_carrier_name: "Nuvem Envio",
+        customer_visit: {
+          utm_parameters: {
+            utm_source: "ig",
+            utm_medium: "paid",
+            utm_campaign: "120222198954390582",
+            utm_content: "120240092594690582",
+            utm_term: "120240092594710582",
+          },
+        },
+        storefront: "mobile",
+        contact_email: "ninicksacf@gmail.com",
+      };
+
+      const order = await orderService.upsertOrderFromNuvemshop(
+        nuvemshopOrderData as any
+      );
+
+      assert.ok(order);
+      assert.strictEqual(order.nuvemshop_order_id, "1969442650");
+      assert.strictEqual(order.customer_name, "Aline Costa Fernandes");
+      assert.strictEqual(order.status, "PAID");
+      assert.strictEqual(Number(order.total_amount), 125.66);
+
+      assert.strictEqual(Number(order.discount_amount), 49.40);
+      assert.strictEqual(Number(order.shipping_cost_customer), 25.36);
+      assert.strictEqual(Number(order.shipping_cost_owner), 25.36);
+      assert.ok(order.paid_at instanceof Date);
+      assert.strictEqual(order.shipped_at, null);
+      assert.ok(order.completed_at instanceof Date);
+      assert.strictEqual(order.cancelled_at, null);
+      assert.strictEqual(order.payment_method, "credit_card");
+      assert.strictEqual(order.payment_installments, 3);
+      assert.strictEqual(order.gateway, "nuvem-pago");
+      assert.strictEqual(order.shipping_city, "Belo Horizonte");
+      assert.strictEqual(order.shipping_province, "Minas Gerais");
+      assert.strictEqual(order.shipping_carrier, "Nuvem Envio");
+      assert.strictEqual(order.utm_source, "ig");
+      assert.strictEqual(order.utm_medium, "paid");
+      assert.strictEqual(order.utm_campaign, "120222198954390582");
+      assert.strictEqual(order.utm_content, "120240092594690582");
+      assert.strictEqual(order.utm_term, "120240092594710582");
+      assert.strictEqual(order.storefront, "mobile");
+      assert.strictEqual(order.customer_email, "ninicksacf@gmail.com");
+
+      // Cleanup order
+      await db("orders").where({ id: order.id }).del();
+      await db("product_variants")
+        .where({ product_id: product.id })
+        .del();
+      await db("products").where({ id: product.id }).del();
+    });
+
+    it("should handle a minimal Nuvemshop order payload without enriched fields", async () => {
+      const product = await productService.createProduct({
+        slug: "minimal-upsert-test",
+        name: "Minimal Upsert Product",
+        variants: [
+          {
+            sku: "MIN-001",
+            price: 30.00,
+            stock_quantity: 50,
+            nuvemshop_variant_id: "111222333",
+          },
+        ],
+      });
+      const nuvemshopVariantId = product.variants[0]!.nuvemshop_variant_id!;
+
+      const minimalData = {
+        id: "1234567890",
+        customer: { name: "Minimal Customer" },
+        status: "PENDING",
+        total: 60.0,
+        items: [
+          { variant_id: nuvemshopVariantId, quantity: 2, price: 30.00 },
+        ],
+      };
+
+      const order = await orderService.upsertOrderFromNuvemshop(
+        minimalData as any
+      );
+
+      assert.ok(order);
+      assert.strictEqual(order.nuvemshop_order_id, "1234567890");
+      assert.strictEqual(Number(order.total_amount), 60.0);
+      assert.strictEqual(order.discount_amount, null);
+      assert.strictEqual(order.payment_method, null);
+      assert.strictEqual(order.utm_source, null);
+      assert.strictEqual(order.customer_email, null);
+
+      // Cleanup
+      await db("orders").where({ id: order.id }).del();
+      await db("product_variants")
+        .where({ product_id: product.id })
+        .del();
+      await db("products").where({ id: product.id }).del();
+    });
+  });
 });
