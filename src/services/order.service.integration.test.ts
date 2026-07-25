@@ -196,5 +196,43 @@ describe("OrderService Integration Tests", () => {
         .first();
       assert.strictEqual(variant.stock_quantity, 15);
     });
+
+    it("should prevent double-deduction under concurrent requests", async () => {
+      const product = await productService.createProduct({
+        slug: "concurrent-stock-test",
+        name: "Concurrent Stock Test",
+        variants: [{ price: 50, stock_quantity: 10 }],
+      });
+      const concVariantId = product.variants[0]!.id;
+
+      const results = await Promise.allSettled([
+        orderService.createOrder({
+          customer_name: "Concurrent A",
+          items: [{ variant_id: concVariantId, quantity: 5, unit_price: 50 }],
+        }),
+        orderService.createOrder({
+          customer_name: "Concurrent B",
+          items: [{ variant_id: concVariantId, quantity: 5, unit_price: 50 }],
+        }),
+      ]);
+
+      const fulfilled = results.filter(r => r.status === "fulfilled").length;
+      assert.strictEqual(fulfilled, 2, "Both orders should succeed");
+
+      const variant = await db("product_variants")
+        .where({ id: concVariantId })
+        .first();
+      assert.strictEqual(variant.stock_quantity, 0);
+
+      await db("inventory_transactions").where({ variant_id: concVariantId }).del();
+      await db("order_items")
+        .whereIn("order_id", results.filter(r => r.status === "fulfilled").map(r => (r as PromiseFulfilledResult<any>).value.id))
+        .del();
+      await db("orders")
+        .whereIn("id", results.filter(r => r.status === "fulfilled").map(r => (r as PromiseFulfilledResult<any>).value.id))
+        .del();
+      await db("product_variants").where({ id: concVariantId }).del();
+      await db("products").where({ slug: "concurrent-stock-test" }).del();
+    });
   });
 });
