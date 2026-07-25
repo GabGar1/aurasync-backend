@@ -1,6 +1,7 @@
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { UserSchema } from "../schemas/user.schema.js";
 import { userService } from "../services/user.service.js";
+import { requireRole } from "../middlewares/role.middleware.js";
 import "@fastify/jwt";
 import { z } from "zod";
 
@@ -19,6 +20,8 @@ export const userRoutes: FastifyPluginAsyncZod = async (app) => {
   app.post(
     "/users",
     {
+      onRequest: [app.authenticate],
+      preHandler: [requireRole(["ADMIN", "SUPER_ADMIN"])],
       schema: {
         body: UserSchema.register,
       },
@@ -116,6 +119,7 @@ export const userRoutes: FastifyPluginAsyncZod = async (app) => {
     "/users/:id",
     {
       onRequest: [app.authenticate],
+      preHandler: [requireRole(["ADMIN", "SUPER_ADMIN"])],
       schema: {
         params: z.object({
           id: z.string().uuid(),
@@ -140,6 +144,7 @@ export const userRoutes: FastifyPluginAsyncZod = async (app) => {
     "/users/:id/password",
     {
       onRequest: [app.authenticate],
+      preHandler: [requireRole(["ADMIN", "SUPER_ADMIN"])],
       schema: {
         params: z.object({
           id: z.string().uuid(),
@@ -164,6 +169,7 @@ export const userRoutes: FastifyPluginAsyncZod = async (app) => {
     "/users/:id",
     {
       onRequest: [app.authenticate],
+      preHandler: [requireRole(["ADMIN", "SUPER_ADMIN"])],
       schema: {
         params: z.object({
           id: z.string().uuid(),
@@ -221,6 +227,7 @@ export const userRoutes: FastifyPluginAsyncZod = async (app) => {
   app.get(
     "/users/check-email",
     {
+      onRequest: [app.authenticate],
       schema: {
         querystring: z.object({
           email: z.string().email(),
