@@ -113,7 +113,8 @@ export class UserRepository {
 
     if (filters.search) {
       query = query.where((builder: Knex.QueryBuilder) => {
-        builder.where('name', 'ilike', `%${filters.search}%`)
+        builder.where('first_name', 'ilike', `%${filters.search}%`)
+          .orWhere('last_name', 'ilike', `%${filters.search}%`)
           .orWhere('email', 'ilike', `%${filters.search}%`);
       });
     }

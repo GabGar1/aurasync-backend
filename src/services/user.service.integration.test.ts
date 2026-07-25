@@ -139,4 +139,25 @@ describe("UserService Integration Tests", () => {
       assert.strictEqual(checkUser, null);
     });
   });
+
+  // --- SEARCH ---
+  describe("6. Search Users", () => {
+    it("should find users by first name when searching", async () => {
+      const user = await userService.createUser({
+        first_name: "Searchable",
+        last_name: "User",
+        email: "searchable.user@aurasync.com",
+        password: "SearchPass123!",
+      });
+
+      const result = await userService.getUsers(1, 10, { search: "Searchable" });
+      assert.ok(result.users.length >= 1);
+      assert.ok(result.users.some(u => u.id === user.id));
+    });
+
+    it("should find users by last name when searching", async () => {
+      const result = await userService.getUsers(1, 10, { search: "User" });
+      assert.ok(result.users.length >= 1);
+    });
+  });
 });
