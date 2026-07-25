@@ -178,4 +178,78 @@ describe("ProductService Integration Tests", () => {
       assert.strictEqual(checkProduct, null);
     });
   });
+
+  describe("Nuvemshop Product Upsert Enrichment", () => {
+    it("should store variant dimensions from Nuvemshop payload", async () => {
+      const nuvemshopData = {
+        id: "159029942",
+        name: "Anel Biterminado",
+        category: "Anéis",
+        is_active: true,
+        variants: [
+          {
+            id: "601866046",
+            sku: "ABCS",
+            price: 46.00,
+            stock_quantity: 10,
+            cost_price: 18.50,
+            weight: 0.250,
+            height: 9.00,
+            width: 15.00,
+            depth: 23.00,
+          },
+        ],
+      };
+
+      const product =
+        await productService.upsertProductFromNuvemshop(nuvemshopData as any);
+
+      assert.ok(product);
+      assert.strictEqual(product.name, "Anel Biterminado");
+      assert.strictEqual(product.variants.length, 1);
+
+      const variant = product.variants[0]!;
+      assert.strictEqual(Number(variant.weight), 0.250);
+      assert.strictEqual(Number(variant.height), 9.00);
+      assert.strictEqual(Number(variant.width), 15.00);
+      assert.strictEqual(Number(variant.depth), 23.00);
+
+      // Cleanup
+      await db("product_variants")
+        .where({ product_id: product.id })
+        .del();
+      await db("products").where({ id: product.id }).del();
+    });
+
+    it("should handle variants without dimensions (null)", async () => {
+      const nuvemshopData = {
+        id: "123456789",
+        name: "No Dimensions Product",
+        is_active: true,
+        variants: [
+          {
+            id: "987654321",
+            sku: "NODIM-001",
+            price: 30.00,
+            stock_quantity: 5,
+          },
+        ],
+      };
+
+      const product =
+        await productService.upsertProductFromNuvemshop(nuvemshopData as any);
+
+      const variant = product.variants[0]!;
+      assert.strictEqual(variant.weight, null);
+      assert.strictEqual(variant.height, null);
+      assert.strictEqual(variant.width, null);
+      assert.strictEqual(variant.depth, null);
+
+      // Cleanup
+      await db("product_variants")
+        .where({ product_id: product.id })
+        .del();
+      await db("products").where({ id: product.id }).del();
+    });
+  });
 });
