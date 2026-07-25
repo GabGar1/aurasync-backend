@@ -25,6 +25,7 @@ export class InventoryRepository {
     return await db.transaction(async (trx) => {
       const variant = await trx('product_variants')
         .where({ id: data.variant_id })
+        .forUpdate()
         .first();
 
       if (!variant) {
