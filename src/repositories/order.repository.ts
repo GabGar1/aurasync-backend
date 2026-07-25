@@ -99,6 +99,38 @@ export class OrderRepository {
         .insert(itemsToInsert)
         .returning('*');
 
+      for (const item of items) {
+        const variant = await trx('product_variants')
+          .where({ id: item.variant_id })
+          .forUpdate()
+          .first();
+
+        if (!variant) {
+          throw new Error(`Product variant ${item.variant_id} not found`);
+        }
+
+        if (variant.stock_quantity < item.quantity) {
+          throw new Error(
+            `Insufficient stock for variant ${item.variant_id}. Available: ${variant.stock_quantity}, requested: ${item.quantity}`
+          );
+        }
+
+        await trx('product_variants')
+          .where({ id: item.variant_id })
+          .update({
+            stock_quantity: variant.stock_quantity - item.quantity,
+            updated_at: new Date(),
+          });
+
+        await trx('inventory_transactions')
+          .insert({
+            variant_id: item.variant_id,
+            order_id: order.id,
+            quantity_changed: -item.quantity,
+            type: 'SALE',
+          });
+      }
+
       return {
         ...order,
         items: insertedItems

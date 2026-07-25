@@ -2,6 +2,7 @@ import { describe, it, after, before } from "node:test";
 import assert from "node:assert";
 import { orderService } from "./order.service.js";
 import { productService } from "./product.service.js";
+import { db } from "../lib/db.js";
 import {cleanupDatabase} from "../test/setup";
 
 describe("OrderService Integration Tests", () => {
@@ -139,6 +140,61 @@ describe("OrderService Integration Tests", () => {
       // 3. Verifica se sumiu (porque o soft delete esconde o registro na busca padrão)
       const checkOrder = await orderService.getOrderById(tempOrder.id);
       assert.strictEqual(checkOrder, null);
+    });
+  });
+
+  // --- STOCK DEDUCTION ---
+  describe("5. Stock Deduction on Order Creation", () => {
+    let stockTestVariantId: string;
+
+    before(async () => {
+      const product = await productService.createProduct({
+        slug: "stock-deduction-test",
+        name: "Stock Deduction Test",
+        variants: [{ price: 100, stock_quantity: 20 }],
+      });
+      stockTestVariantId = product.variants[0]!.id;
+    });
+
+    it("should deduct stock when order is created", async () => {
+      const order = await orderService.createOrder({
+        customer_name: "Stock Test",
+        items: [{ variant_id: stockTestVariantId, quantity: 5, unit_price: 100 }],
+      });
+
+      assert.ok(order);
+
+      const variant = await db("product_variants")
+        .where({ id: stockTestVariantId })
+        .first();
+      assert.strictEqual(variant.stock_quantity, 15);
+
+      const tx = await db("inventory_transactions")
+        .where({ variant_id: stockTestVariantId, order_id: order.id })
+        .first();
+      assert.ok(tx);
+      assert.strictEqual(tx.quantity_changed, -5);
+      assert.strictEqual(tx.type, "SALE");
+    });
+
+    it("should throw error when insufficient stock", async () => {
+      await assert.rejects(
+        async () => {
+          await orderService.createOrder({
+            customer_name: "Over Order",
+            items: [{ variant_id: stockTestVariantId, quantity: 100, unit_price: 100 }],
+          });
+        },
+        (err: Error) => {
+          assert.ok(err.message.includes("Insufficient stock"));
+          return true;
+        }
+      );
+
+      const variant = await db("product_variants")
+        .where({ id: stockTestVariantId })
+        .first();
+      assert.strictEqual(variant.stock_quantity, 15);
     });
   });
 });
