@@ -9,6 +9,26 @@ export interface Order {
   customer_name: string | null;
   status: string;
   total_amount: number;
+  discount_amount: number | null;
+  shipping_cost_customer: number | null;
+  shipping_cost_owner: number | null;
+  paid_at: Date | null;
+  shipped_at: Date | null;
+  completed_at: Date | null;
+  cancelled_at: Date | null;
+  payment_method: string | null;
+  payment_installments: number | null;
+  gateway: string | null;
+  shipping_city: string | null;
+  shipping_province: string | null;
+  shipping_carrier: string | null;
+  utm_source: string | null;
+  utm_medium: string | null;
+  utm_campaign: string | null;
+  utm_content: string | null;
+  utm_term: string | null;
+  storefront: string | null;
+  customer_email: string | null;
   deleted_at?: Date | null;
   created_at: Date;
   updated_at: Date;
@@ -56,14 +76,42 @@ export interface NuvemshopOrderItemData {
 }
 
 export interface NuvemshopOrderData {
-  id: string; // Nuvemshop's order ID
+  id: string;
   customer: {
     name: string;
   };
   status: string;
   total: number;
   items: NuvemshopOrderItemData[];
-  // Add other relevant fields from Nuvemshop webhook payload as needed
+  discount?: string;
+  shipping_cost_customer?: string;
+  shipping_cost_owner?: string;
+  paid_at?: string | null;
+  shipped_at?: string | null;
+  completed_at?: { date: string; timezone_type: number; timezone: string } | null;
+  cancelled_at?: string | null;
+  payment_details?: {
+    method?: string;
+    credit_card_company?: string;
+    installments?: number;
+  } | null;
+  gateway?: string;
+  shipping_address?: {
+    city?: string;
+    province?: string;
+  };
+  shipping_carrier_name?: string;
+  customer_visit?: {
+    utm_parameters?: {
+      utm_source?: string;
+      utm_medium?: string;
+      utm_campaign?: string;
+      utm_content?: string;
+      utm_term?: string;
+    };
+  };
+  storefront?: string;
+  contact_email?: string;
 }
 
 
@@ -148,23 +196,52 @@ export class OrderRepository {
         .where({ nuvemshop_order_id })
         .first();
 
+      const orderUpsertData = {
+        customer_name: customer.name,
+        status,
+        total_amount: total,
+        updated_at: new Date(),
+        discount_amount: data.discount ? parseFloat(data.discount) : null,
+        shipping_cost_customer: data.shipping_cost_customer
+          ? parseFloat(data.shipping_cost_customer)
+          : null,
+        shipping_cost_owner: data.shipping_cost_owner
+          ? parseFloat(data.shipping_cost_owner)
+          : null,
+        paid_at: data.paid_at ? new Date(data.paid_at) : null,
+        shipped_at: data.shipped_at ? new Date(data.shipped_at) : null,
+        completed_at: data.completed_at?.date
+          ? new Date(data.completed_at.date)
+          : null,
+        cancelled_at: data.cancelled_at ? new Date(data.cancelled_at) : null,
+        payment_method: data.payment_details?.method || null,
+        payment_installments: data.payment_details?.installments
+          ? data.payment_details.installments
+          : null,
+        gateway: data.gateway || null,
+        shipping_city: data.shipping_address?.city || null,
+        shipping_province: data.shipping_address?.province || null,
+        shipping_carrier: data.shipping_carrier_name || null,
+        utm_source: data.customer_visit?.utm_parameters?.utm_source || null,
+        utm_medium: data.customer_visit?.utm_parameters?.utm_medium || null,
+        utm_campaign: data.customer_visit?.utm_parameters?.utm_campaign || null,
+        utm_content: data.customer_visit?.utm_parameters?.utm_content || null,
+        utm_term: data.customer_visit?.utm_parameters?.utm_term || null,
+        storefront: data.storefront || null,
+        customer_email: data.contact_email || null,
+      };
+
       if (existingOrder) {
         [order] = await trx(this.ordersTable)
           .where({ id: existingOrder.id })
-          .update({
-            customer_name: customer.name,
-            status,
-            total_amount: total,
-            updated_at: new Date(),
-          })
+          .update(orderUpsertData)
           .returning('*');
       } else {
         [order] = await trx(this.ordersTable)
           .insert({
             nuvemshop_order_id,
-            customer_name: customer.name,
-            status,
-            total_amount: total,
+            ...orderUpsertData,
+            updated_at: undefined,
           })
           .returning('*');
       }
