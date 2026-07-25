@@ -215,7 +215,7 @@ export class OrderRepository {
           : null,
         cancelled_at: data.cancelled_at ? new Date(data.cancelled_at) : null,
         payment_method: data.payment_details?.method || null,
-        payment_installments: data.payment_details?.installments
+        payment_installments: data.payment_details?.installments != null
           ? data.payment_details.installments
           : null,
         gateway: data.gateway || null,
