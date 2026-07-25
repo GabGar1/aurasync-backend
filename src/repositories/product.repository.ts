@@ -25,6 +25,10 @@ export interface ProductVariant {
   packaging_cost: number;
   platform_fee_percent: number;
   fixed_fee: number;
+  weight: number | null;
+  height: number | null;
+  width: number | null;
+  depth: number | null;
   deleted_at?: Date | null;
   created_at: Date;
   updated_at: Date;
@@ -44,6 +48,10 @@ export interface CreateVariantInput {
   packaging_cost?: number;
   platform_fee_percent?: number;
   fixed_fee?: number;
+  weight?: number;
+  height?: number;
+  width?: number;
+  depth?: number;
 }
 
 export interface CreateProductInput {
@@ -63,7 +71,7 @@ export interface UpdateProductInput {
 }
 
 export interface NuvemshopVariantData {
-  id: string; // Nuvemshop's variant ID
+  id: string;
   sku?: string;
   name?: string;
   price: number;
@@ -72,6 +80,10 @@ export interface NuvemshopVariantData {
   packaging_cost?: number;
   platform_fee_percent?: number;
   fixed_fee?: number;
+  weight?: number;
+  height?: number;
+  width?: number;
+  depth?: number;
 }
 
 export interface NuvemshopProductData {
