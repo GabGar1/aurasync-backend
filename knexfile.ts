@@ -9,9 +9,9 @@ const config: Knex.Config = {
     extension: "ts",
   },
   pool: {
-    min: 0,
+    min: 2,
     max: 10,
-    idleTimeoutMillis: 100
+    idleTimeoutMillis: 30000
   }
 };
 
