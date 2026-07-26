@@ -9,6 +9,7 @@ import { productRoutes } from './routers/product.router.js';
 import {orderRoutes} from "./routers/order.router";
 import {inventoryRoutes} from "./routers/inventory.router";
 import { webhookRoutes } from './routers/webhook.router.js';
+import { dashboardRoutes } from './routers/dashboard.router.js';
 import {fastifySwagger} from "@fastify/swagger";
 import {fastifySwaggerUi} from "@fastify/swagger-ui";
 import {fastifyCors} from "@fastify/cors";
@@ -82,7 +83,7 @@ app.register(productRoutes, { prefix: "/api/products" });
 app.register(orderRoutes, { prefix: '/api/orders' });
 app.register(inventoryRoutes, { prefix: '/api/inventory' });
 app.register(webhookRoutes, { prefix: '/api/webhooks' });
-
+app.register(dashboardRoutes, { prefix: '/api' });
 
 const start = async () => {
   try {
