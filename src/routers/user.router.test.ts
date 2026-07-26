@@ -6,7 +6,12 @@ import { serializerCompiler, validatorCompiler } from "fastify-type-provider-zod
 import type { FastifyRequest, FastifyReply } from "fastify";
 import { userRoutes } from "./user.router.js";
 import { db } from "../lib/db.js";
-import { cleanupDatabase } from "../test/setup.js";
+
+const testEmails = [
+  "user.auth.test@aurasync.com",
+  "new.user@aurasync.com",
+  "delete.auth.test@aurasync.com",
+];
 
 declare module "@fastify/jwt" {
   interface FastifyJWT {
@@ -38,7 +43,7 @@ describe("User Router Auth", () => {
   let testUserId: string;
 
   before(async () => {
-    await cleanupDatabase();
+    await db("users").whereIn("email", testEmails).del();
 
     app = await buildApp();
 
@@ -57,8 +62,7 @@ describe("User Router Auth", () => {
 
   after(async () => {
     await app.close();
-    await db("users").del();
-    await cleanupDatabase();
+    await db("users").whereIn("email", testEmails).del();
   });
 
   describe("POST /users — register", () => {

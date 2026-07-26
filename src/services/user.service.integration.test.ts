@@ -1,24 +1,25 @@
 import {describe, it, after, before} from "node:test";
 import assert from "node:assert";
 import { userService } from "./user.service.js";
-import {cleanupDatabase} from "../test/setup";
+import { db } from "../lib/db.js";
 
 describe("UserService Integration Tests", () => {
   const testEmails = [
     "olivia.bennett@aurasync.com",
     "duplicate.test@aurasync.com",
     "update.test@aurasync.com",
-    "delete.test@aurasync.com"
+    "delete.test@aurasync.com",
+    "searchable.user@aurasync.com",
   ];
 
   let mainUserId: string;
 
   before(async () => {
-    await cleanupDatabase();
+    await db("users").whereIn("email", testEmails).del();
   });
 
   after(async () => {
-    await cleanupDatabase();
+    await db("users").whereIn("email", testEmails).del();
   });
 
   // --- CREATE ---

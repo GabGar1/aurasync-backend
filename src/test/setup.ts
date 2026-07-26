@@ -6,8 +6,7 @@ export const cleanupDatabase = async () => {
     'order_items',
     'orders',
     'product_variants',
-    'products',
-    'users'
+    'products'
   ];
 
   try {

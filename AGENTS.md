@@ -1,99 +1,74 @@
-# AuraSync Backend — Project Context & Standards (Harness)
+# AuraSync Backend — Agent Context
 
-> Reference document for the AI agent (Superpowers-style harness) working on this repository.
-> Based on a real code review of the project (aurasync-backend).
+E-commerce management system (Nuvemshop-integrated) — orders, inventory, product catalog. Data is built for analytics (margin, cost, stock turnover); accuracy/traceability at transaction time matters more than convenience.
 
-## Purpose of this document
+## Stack
 
-Give the agent context on the project's domain, mandatory code standards, file-creation conventions, the Git workflow (branch/commit), and what defines a task as done. This document does **not** list known bugs — finding and fixing bugs is the agent's own job, not something pre-chewed here.
+- Node + TypeScript (ESM, `"type": "module"`)
+- Fastify 5 + `@fastify/jwt` (auth), `@fastify/cors`, `@fastify/swagger`
+- Knex (pg) — raw query builder, not an ORM
+- Zod for validation
+- `ws` for WebSocket broadcasts (`src/lib/websocket.ts`)
+- `node:test` + `node:assert` — real integration tests (no mocking)
+- `tsx` for running TS directly (dev, tests)
 
----
+## Quickstart
 
-## 1. Project domain
-
-AuraSync Backend is the core of an e-commerce management system (integrated with Nuvemshop) with three central, interrelated modules:
-
-- **Order manager** (`orders` / `order_items`): receives and processes orders, both created internally and synced via Nuvemshop webhooks.
-- **Inventory/stock manager** (`inventory_transactions`): records every stock movement (sale, restock, adjustment) and keeps `product_variants.stock_quantity` consistent with the transaction history.
-- **Catalog/inventory data** (`products` / `product_variants`): source of truth for products, variants, prices, costs, and fees.
-
-These three modules exist to feed the system's ultimate goal: **generating data intelligence for real business decision-making** (margin per product, real cost vs. sale price, stock turnover, sales performance, etc.). Any new data modeling or feature must consider that the data generated here will later be consumed by analytics/reporting — meaning data accuracy and traceability (cost, fee, price at the exact moment of the transaction) matter more than implementation convenience.
-
----
-
-## 2. Stack
-
-- Runtime: Node.js + TypeScript (ESM, `"type": "module"`)
-- HTTP framework: Fastify 5 (+ `fastify-type-provider-zod`)
-- ORM / query builder: Knex (client `pg`)
-- Validation: Zod
-- Auth: `@fastify/jwt`
-- Realtime: `ws` (native WebSocket, managed in `src/lib/websocket.ts`)
-- External integration: Nuvemshop (Tiendanube) API
-- Tests: `node:test` + `node:assert`, real **integration tests** (not mocked)
-
----
-
-## 3. Architecture (MUST FOLLOW)
-
-Strict layers, no skipping steps:
-
-```
-Router (src/routers/*.router.ts)
-  → handles HTTP, validates payload, calls Service, formats response
-Service (src/services/*.service.ts)
-  → business logic, Zod validation (Schema.x.parse()), orchestrates Repository(ies)
-Repository (src/repositories/*.repository.ts)
-  → the only layer that talks to Knex/the database
+```bash
+docker compose up -d                    # Postgres 15 on :5433
+cp .env.example .env || true            # env already exists
+npm run db:migrate                      # run migrations
+npm run dev                             # tsx watch on :3333
+npm test                                # node --test --test-concurrency=1 src/**/*.test.ts
+npm run db:make -- <name>               # new migration
+npm run db:rollback                     # rollback last batch
+npm run db:seed                         # create/reset default SUPER_ADMIN user
 ```
 
-Rule: Router **never** calls Repository directly. Service **never** builds raw Knex queries directly.
+DB: `postgresql://admin:admin@127.0.0.1:5433/aurasync` (from `DATABASE_URL` env).
 
----
+## Architecture (strict)
 
-## 4. Mandatory code principles
+```
+Router (src/routers/*.router.ts)  → HTTP, call Service, format response
+Service (src/services/*.service.ts)  → business logic, Zod parse, orchestrate Repos
+Repository (src/repositories/*.repository.ts)  → only layer touching Knex
+```
 
-- **SOLID** whenever applicable:
-  - **SRP** — each Service/Repository owns a single domain responsibility; don't mix order business logic inside the inventory service, for example.
-  - **DIP** — higher layers depend on types/interfaces (contracts), not on the implementation details of lower layers.
-  - **OCP/LSP/ISP** — prefer composition and small, cohesive interfaces over rigid inheritance or classes that do everything.
-- **Util rule**: any logic/function used in more than one place (even across different layers or modules) must be extracted into a shared utility function (`src/lib/` or `src/utils/`), never duplicated. Before writing a new function, check whether an equivalent one already exists in the project.
-- No premature abstraction: a function only becomes a util once the second real use actually appears — don't pre-build utils "just in case."
+Router never calls Repository. Service never builds raw Knex queries.
 
----
+## Conventions
 
-## 5. Established conventions (always follow)
+- **Soft delete**: `deleted_at` nullable + `whereNull('deleted_at')` on reads. Never hard delete except methods named `hardDelete`.
+- **UUID PKs**: `table.uuid('id').primary().defaultTo(knex.fn.uuid())`.
+- **Timestamps**: `table.timestamps(true, true)`.
+- **Transactions**: multi-table writes MUST use `db.transaction(async (trx) => {...})`.
+- **Validation**: input goes through `XSchema.<action>.parse()` in Service before Repository.
+- **Error responses**: `{ error: string }` with HTTP 400/401/403/404/500.
+- **Webhook HMAC**: `x-webhook-signature` verified via `nuvemshop.middleware.ts`; raw body enabled only for `/api/webhooks/nuvemshop` via `fastify-raw-body`.
+- **Auth**: `fastify.authenticate` (JWT) on protected routes; `requireRole(['ADMIN', 'SUPER_ADMIN'])` for admin-only endpoints.
+- **Single util per need**: extract shared logic to `src/lib/` only after a second real use appears.
 
-- **Soft delete**: every domain entity uses `deleted_at` (nullable) + `whereNull('deleted_at')` on every read. Never hard delete, except in methods explicitly named `hardDelete`.
-- **IDs**: UUID (`table.uuid('id').primary().defaultTo(knex.fn.uuid())`), never serial/int.
-- **Timestamps**: `table.timestamps(true, true)` (automatic created_at/updated_at).
-- **Transactions**: any operation that writes to more than one table (e.g., order + items, stock + transaction) MUST use `db.transaction(async (trx) => {...})`.
-- **Validation**: all user input goes through `XSchema.<action>.parse()` in the Service before touching the Repository.
-- **API error pattern**: `{ error: string }` with the appropriate HTTP status (400/401/403/404).
-- **External webhooks**: always validate the HMAC signature using the raw body before processing (reference: `nuvemshop.middleware.ts`).
+## Testing (mandatory — TDD)
 
----
+- Every feature/bugfix starts with a failing test.
+- Tests are **real integration tests** — no mocking Knex. Follow `*.service.integration.test.ts` pattern with `cleanupDatabase()` in `before`/`after` (`src/test/setup.ts`).
+- `cleanupDatabase()` truncates all tables **except `users`** — seed/admin users survive test runs.
+- Tests that create users must clean up only their own data in `after` (by known email/ID), never call `db("users").del()` or truncate the whole table.
+- Run: `npm test` (runs serially via `--test-concurrency=1`).
+- Hard-delete test artifacts after the suite: `db("table").del()` in `after` (not soft-delete).
 
-## 6. TDD (mandatory)
+## Known quirks / bugs (do not replicate)
 
-- Every new feature or bug fix starts with a failing test, then the minimal implementation to make it pass, then refactor.
-- Service tests are **real integration tests** (test database), following the existing pattern in `*.service.integration.test.ts` (`cleanupDatabase()` in `before`/`after`). Do not mock Knex.
-- No task is considered done without a test covering the implemented or fixed case.
+- **Price fields inconsistent**: `product.schema.ts` uses `z.int()` (cents), `order.schema.ts` uses `z.number()` (decimal). DB stores as `decimal(10,2)`. If adding new price/cost fields, match DB decimal type (`z.number()`) unless the pattern is deliberately cents.
+- **user.schema.ts:49** — `listResponse.id` is typed `z.number()` but DB uses UUID. This is a bug; use `z.string().uuid()` for new schemas.
+- **Dead deps**: `express`, `@types/express`, and `cors` in package.json are unused (Fastify is the framework). Do not add Express code.
+- **`fastify-type-provider-zod`**: used only in `user.router.ts`. Other routers use plain `FastifyPluginAsync`. Either path is acceptable.
+- **Nuvemshop service**: has a top-level side-effect console.log in `nuvemshop.service.ts` (module eval). Do not replicate this pattern.
+- **Inventory stock update**: `inventory.repository.ts` directly mutates `product_variants.stock_quantity`. This bypasses the service layer for that specific operation — model new stock logic the same way.
 
----
+## Git workflow
 
-## 7. Git workflow: branch & commit
-
-- There is no PR policy — work happens directly on branches.
-- When starting a task, create a new branch dedicated to it.
-- When finishing a task, always commit the work on that branch — never leave changes uncommitted.
-
----
-
-## 8. Definition of Done
-
-A task is only considered complete when it is:
-
-1. **Tested** — covered by test(s) following TDD, relevant cases validated.
-2. **Reviewed** — code reviewed before being marked as finished.
-3. **Bug-free** — no known bugs introduced or left behind in what was touched.
+- Work directly on branches (no PR policy).
+- Create a new branch per task.
+- Commit finished work — never leave uncommitted changes.
