@@ -1,16 +1,19 @@
-import type { FastifyPluginAsync } from 'fastify';
+import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { productService } from '../services/product.service.js';
 import {requireRole} from "../middlewares/role.middleware";
 import {nuvemshopService} from "../services/nuvemshop.service";
+import { ProductSchema } from '../schemas/product.schema.js';
+import { z } from "zod";
 
-export const productRoutes: FastifyPluginAsync = async (fastify) => {
+export const productRoutes: FastifyPluginAsyncZod = async (fastify) => {
 
   fastify.post('/', {
     onRequest: [fastify.authenticate],
-    preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])]
+    preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])],
+    schema: { body: ProductSchema.create }
   }, async (request, reply) => {
     try {
-      const product = await productService.createProduct(request.body as any);
+      const product = await productService.createProduct(request.body);
       return reply.code(201).send(product);
     } catch (error: any) {
       return reply.code(400).send({ error: error.message });
@@ -30,19 +33,29 @@ export const productRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
 
-  fastify.get('/', async (request, reply) => {
+  fastify.get('/', {
+    schema: {
+      querystring: z.object({
+        page: z.coerce.number().optional(),
+        limit: z.coerce.number().optional(),
+        search: z.string().optional(),
+        category: z.string().optional(),
+        is_active: z.string().optional(),
+      }),
+    },
+  }, async (request, reply) => {
     try {
-      const { page, limit, search, category, is_active } = request.query as any;
+      const { page, limit, search, category, is_active } = request.query;
 
       const filters: { search?: string; category?: string; is_active?: boolean } = {};
 
-      if (search !== undefined) filters.search = String(search);
-      if (category !== undefined) filters.category = String(category);
+      if (search !== undefined) filters.search = search;
+      if (category !== undefined) filters.category = category;
       if (is_active !== undefined) filters.is_active = is_active === 'true';
 
       const result = await productService.getProducts(
-        page ? Number(page) : 1,
-        limit ? Number(limit) : 10,
+        page ?? 1,
+        limit ?? 10,
         filters
       );
 
@@ -52,9 +65,11 @@ export const productRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
-  fastify.get('/:id', async (request, reply) => {
+  fastify.get('/:id', {
+    schema: { params: z.object({ id: z.string().uuid() }) },
+  }, async (request, reply) => {
     try {
-      const { id } = request.params as { id: string };
+      const { id } = request.params;
       const product = await productService.getProductById(id);
 
       if (!product) return reply.code(404).send({ error: 'Product not found' });
@@ -65,9 +80,11 @@ export const productRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
-  fastify.get('/slug/:slug', async (request, reply) => {
+  fastify.get('/slug/:slug', {
+    schema: { params: z.object({ slug: z.string().min(1) }) },
+  }, async (request, reply) => {
     try {
-      const { slug } = request.params as { slug: string };
+      const { slug } = request.params;
       const product = await productService.getProductBySlug(slug);
 
       if (!product) return reply.code(404).send({ error: 'Product not found' });
@@ -80,11 +97,15 @@ export const productRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.put('/:id', {
     onRequest: [fastify.authenticate],
-    preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])]
+    preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])],
+    schema: {
+      params: z.object({ id: z.string().uuid() }),
+      body: ProductSchema.update,
+    },
   }, async (request, reply) => {
     try {
-      const { id } = request.params as { id: string };
-      const product = await productService.updateProduct(id, request.body as any);
+      const { id } = request.params;
+      const product = await productService.updateProduct(id, request.body);
 
       if (!product) return reply.code(404).send({ error: 'Product not found' });
 
@@ -96,10 +117,11 @@ export const productRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.delete('/:id', {
     onRequest: [fastify.authenticate],
-    preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])]
+    preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])],
+    schema: { params: z.object({ id: z.string().uuid() }) },
   }, async (request, reply) => {
     try {
-      const { id } = request.params as { id: string };
+      const { id } = request.params;
       await productService.deleteProduct(id);
 
       return reply.code(204).send();

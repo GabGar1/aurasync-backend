@@ -2,7 +2,6 @@ import type { FastifyPluginAsync } from 'fastify';
 import { verifyNuvemshopWebhook } from '../middlewares/nuvemshop.middleware.js';
 import { productService } from '../services/product.service.js';
 import { orderService } from '../services/order.service.js';
-
 export const webhookRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post(
     '/nuvemshop',
