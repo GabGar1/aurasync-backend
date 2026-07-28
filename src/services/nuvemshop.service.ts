@@ -1,7 +1,6 @@
 import axios from 'axios';
 import { productService } from './product.service.js';
 import { orderService } from "./order.service.js";
-import { db } from '../lib/db.js';
 import { websocketManager } from '../lib/websocket.js';
 
 console.log('=== [AuraSync Debug] Verificando Variáveis de Ambiente ===');
@@ -100,7 +99,7 @@ class NuvemshopService {
 
     } catch (error: any) {
       console.error('Error syncing products with Nuvemshop:', error.response?.data || error.message);
-      throw new Error('Failed to integrate with Nuvemshop');
+      throw new Error('Failed to integrate with Nuvemshop', { cause: error });
     }
   }
 
@@ -179,7 +178,7 @@ class NuvemshopService {
 
     } catch (error: any) {
       console.error('Error syncing orders with Nuvemshop:', error.response?.data || error.message);
-      throw new Error('Failed to integrate orders with Nuvemshop');
+      throw new Error('Failed to integrate orders with Nuvemshop', { cause: error });
     }
   }
 }

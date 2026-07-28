@@ -100,7 +100,7 @@ const start = async () => {
     console.log(`🚀 WebSocket server is running`);
     console.log(`📚 Swagger documentation available at http://localhost:${port}/docs`);
   } catch (err) {
-    app.log.error(err);
+    app.log.error(err as Error);
     process.exit(1);
   }
 };

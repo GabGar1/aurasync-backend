@@ -11,6 +11,8 @@
     "db:make": "node --import tsx ./node_modules/knex/bin/cli.js migrate:make -x ts",
     "db:migrate": "node --import tsx ./node_modules/knex/bin/cli.js migrate:latest",
     "db:rollback": "node --import tsx ./node_modules/knex/bin/cli.js migrate:rollback",
+    "lint": "eslint src/",
+    "lint:fix": "eslint src/ --fix",
     "db:seed": "node --import tsx src/db/seed.ts"
   },
   "keywords": [],
@@ -33,10 +35,13 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/bcrypt": "^6.0.0",
     "@types/node": "^25.5.0",
     "@types/ws": "^8.5.11",
+    "eslint": "^9.39.5",
     "tsx": "^4.21.0",
-    "typescript": "^6.0.2"
+    "typescript": "^6.0.2",
+    "typescript-eslint": "^8.65.0"
   }
 }
