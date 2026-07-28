@@ -4,6 +4,7 @@ node_modules/
 # Variáveis de Ambiente (NUNCA SUBIR PARA O GITHUB!)
 .env
 .env.*
+!.env.example
 
 # Build e Logs
 dist/
