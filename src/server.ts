@@ -10,9 +10,11 @@ import {orderRoutes} from "./routers/order.router";
 import {inventoryRoutes} from "./routers/inventory.router";
 import { webhookRoutes } from './routers/webhook.router.js';
 import { dashboardRoutes } from './routers/dashboard.router.js';
+import { authRoutes } from './routers/auth.router.js';
 import {fastifySwagger} from "@fastify/swagger";
 import {fastifySwaggerUi} from "@fastify/swagger-ui";
 import {fastifyCors} from "@fastify/cors";
+import fastifyCookie from "@fastify/cookie";
 import {fastifyRawBody} from "fastify-raw-body";
 
 declare module "fastify" {
@@ -23,14 +25,20 @@ declare module "fastify" {
 
 const app = Fastify({ logger: true });
 
+const allowedOrigins = process.env.NODE_ENV === 'production'
+  ? ['https://lamata.tec.br']
+  : ['http://localhost:5173', 'http://127.0.0.1:5173'];
+
 app.register(fastifyCors, {
-  origin: process.env.NODE_ENV === 'production'
-    ? ['https://lamata.tec.br']
-    : '*',
+  origin: allowedOrigins,
+  credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  optionsSuccessStatus: 204
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-TOKEN'],
+  exposedHeaders: ['XSRF-TOKEN'],
+  optionsSuccessStatus: 204,
 });
+
+app.register(fastifyCookie);
 
 app.setValidatorCompiler(validatorCompiler);
 app.setSerializerCompiler(serializerCompiler);
@@ -44,6 +52,7 @@ app.register(fastifyRawBody, {
 
 app.register(fastifyJwt, {
   secret: process.env.JWT_SECRET as string,
+  cookie: { cookieName: 'aurasync_token', signed: false },
 });
 
 app.decorate("authenticate", async (request: FastifyRequest, reply: FastifyReply) => {
@@ -84,6 +93,7 @@ app.register(orderRoutes, { prefix: '/api/orders' });
 app.register(inventoryRoutes, { prefix: '/api/inventory' });
 app.register(webhookRoutes, { prefix: '/api/webhooks' });
 app.register(dashboardRoutes, { prefix: '/api' });
+app.register(authRoutes, { prefix: '/api/auth' });
 
 const start = async () => {
   try {
