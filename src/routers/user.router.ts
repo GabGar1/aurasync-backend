@@ -67,6 +67,7 @@ export const userRoutes: FastifyPluginAsyncZod = async (app) => {
     "/users",
     {
       onRequest: [app.authenticate],
+      preHandler: [requireRole(["ADMIN", "SUPER_ADMIN"])],
       schema: {
         querystring: z.object({
           page: z.coerce.number().default(1),
@@ -96,6 +97,7 @@ export const userRoutes: FastifyPluginAsyncZod = async (app) => {
     "/users/:id",
     {
       onRequest: [app.authenticate],
+      preHandler: [requireRole(["ADMIN", "SUPER_ADMIN"])],
       schema: {
         params: z.object({
           id: z.string().uuid(),
@@ -193,6 +195,7 @@ export const userRoutes: FastifyPluginAsyncZod = async (app) => {
     "/users/role/:role",
     {
       onRequest: [app.authenticate],
+      preHandler: [requireRole(["ADMIN", "SUPER_ADMIN"])],
       schema: {
         params: z.object({
           role: z.string(),
@@ -213,6 +216,7 @@ export const userRoutes: FastifyPluginAsyncZod = async (app) => {
     "/users/stats",
     {
       onRequest: [app.authenticate],
+      preHandler: [requireRole(["ADMIN", "SUPER_ADMIN"])],
     },
     async (request, reply) => {
       try {
@@ -228,6 +232,7 @@ export const userRoutes: FastifyPluginAsyncZod = async (app) => {
     "/users/check-email",
     {
       onRequest: [app.authenticate],
+      preHandler: [requireRole(["ADMIN", "SUPER_ADMIN"])],
       schema: {
         querystring: z.object({
           email: z.string().email(),

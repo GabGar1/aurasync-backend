@@ -25,7 +25,9 @@ export const verifyNuvemshopWebhook = (req: FastifyRequest, reply: FastifyReply,
     return;
   }
 
-  const [algorithm, signatureHash] = nuvemshopSignature.split('=');
+  const eqIndex = nuvemshopSignature.indexOf('=');
+  const algorithm = nuvemshopSignature.slice(0, eqIndex);
+  const signatureHash = nuvemshopSignature.slice(eqIndex + 1);
 
   if (algorithm !== 'sha256') {
     console.warn('Algoritmo de assinatura de webhook inválido. Esperado sha256.');
@@ -37,7 +39,7 @@ export const verifyNuvemshopWebhook = (req: FastifyRequest, reply: FastifyReply,
   hmac.update(payload);
   const expectedSignature = hmac.digest('hex');
 
-  if (signatureHash !== expectedSignature) {
+  if (signatureHash.length !== expectedSignature.length || !crypto.timingSafeEqual(Buffer.from(signatureHash), Buffer.from(expectedSignature))) {
     console.warn('Assinatura de webhook inválida recebida.');
     reply.status(401).send({ error: 'Invalid webhook signature.' });
     return;

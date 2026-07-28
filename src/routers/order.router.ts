@@ -14,7 +14,7 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
-  fastify.post('/sync/nuvemshop', { onRequest: [fastify.authenticate] }, (request, reply) => {
+  fastify.post('/sync/nuvemshop', { onRequest: [fastify.authenticate], preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])] }, (request, reply) => {
     // Don't await this. This lets the request finish immediately.
     nuvemshopService.syncOrders().catch(error => {
       console.error("Error during background sync:", error);
@@ -25,7 +25,7 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
 
-  fastify.get('/', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+  fastify.get('/', { onRequest: [fastify.authenticate], preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])] }, async (request, reply) => {
     try {
       const { page, limit, status, search } = request.query as any;
 
@@ -45,7 +45,7 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
-  fastify.get('/:id', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+  fastify.get('/:id', { onRequest: [fastify.authenticate], preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])] }, async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
       const order = await orderService.getOrderById(id);

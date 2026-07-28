@@ -18,7 +18,8 @@ export const productRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   fastify.post('/sync/nuvemshop', {
-    onRequest: [fastify.authenticate]
+    onRequest: [fastify.authenticate],
+    preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])]
   }, async (request, reply) => {
     try {
       const result = await nuvemshopService.syncProducts();
