@@ -46,7 +46,7 @@ export const UserSchema = {
 
   listResponse: z.object({
     users: z.array(z.object({
-      id: z.number(),
+      id: z.string().uuid(),
       email: z.email(),
       first_name: z.string(),
       last_name: z.string(),

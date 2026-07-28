@@ -7,7 +7,7 @@
 
     // Environment Settings
     // See also https://aka.ms/tsconfig/module
-    "module": "ES2024",
+    "module": "ESNext",
     "target": "esnext",
     // For nodejs:
      "lib": ["esnext"],

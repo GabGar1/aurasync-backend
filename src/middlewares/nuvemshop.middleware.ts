@@ -1,7 +1,7 @@
-import type { FastifyRequest, FastifyReply, DoneFuncWithErr } from 'fastify';
+import type { FastifyRequest, FastifyReply, DoneFuncWithErrOrRes } from 'fastify';
 import crypto from 'crypto';
 
-export const verifyNuvemshopWebhook = (req: FastifyRequest, reply: FastifyReply, done: DoneFuncWithErr) => {
+export const verifyNuvemshopWebhook = (req: FastifyRequest, reply: FastifyReply, done: DoneFuncWithErrOrRes) => {
   const nuvemshopSignature = req.headers['x-webhook-signature'] as string;
   const secret = process.env.NUVEMSHOP_WEBHOOK_SECRET;
 
