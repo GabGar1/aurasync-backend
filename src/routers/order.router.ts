@@ -4,8 +4,10 @@ import { nuvemshopService } from '../services/nuvemshop.service.js';
 import { requireRole } from "../middlewares/role.middleware.js";
 import { OrderSchema } from '../schemas/order.schema.js';
 import { z } from "zod";
+import { csrfProtection } from "../middlewares/csrf.middleware.js";
 
 export const orderRoutes: FastifyPluginAsyncZod = async (fastify) => {
+  fastify.addHook('preHandler', csrfProtection());
 
   fastify.post('/', { onRequest: [fastify.authenticate], preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])], schema: { body: OrderSchema.create } }, async (request, reply) => {
     try {

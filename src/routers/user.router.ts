@@ -4,6 +4,7 @@ import { userService } from "../services/user.service.js";
 import { requireRole } from "../middlewares/role.middleware.js";
 import "@fastify/jwt";
 import { z } from "zod";
+import { csrfProtection } from "../middlewares/csrf.middleware.js";
 
 declare module "@fastify/jwt" {
   interface FastifyJWT {
@@ -17,6 +18,7 @@ declare module "@fastify/jwt" {
 }
 
 export const userRoutes: FastifyPluginAsyncZod = async (app) => {
+  app.addHook('preHandler', csrfProtection());
   app.post(
     "/users",
     {
@@ -55,6 +57,14 @@ export const userRoutes: FastifyPluginAsyncZod = async (app) => {
           { sub: user.id, role: user.role, name: user.first_name },
           { expiresIn: "2h" }
         );
+
+        reply.setCookie('aurasync_token', token, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'strict',
+          path: '/',
+          maxAge: 7200,
+        });
 
         return reply.status(200).send({ token, user });
       } catch (error: any) {

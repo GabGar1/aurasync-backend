@@ -4,8 +4,10 @@ import {requireRole} from "../middlewares/role.middleware";
 import {nuvemshopService} from "../services/nuvemshop.service";
 import { ProductSchema } from '../schemas/product.schema.js';
 import { z } from "zod";
+import { csrfProtection } from "../middlewares/csrf.middleware.js";
 
 export const productRoutes: FastifyPluginAsyncZod = async (fastify) => {
+  fastify.addHook('preHandler', csrfProtection());
 
   fastify.post('/', {
     onRequest: [fastify.authenticate],

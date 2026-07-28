@@ -3,8 +3,10 @@ import { inventoryService } from '../services/inventory.service.js';
 import { requireRole } from "../middlewares/role.middleware.js";
 import { InventorySchema } from '../schemas/inventory.schema.js';
 import { z } from "zod";
+import { csrfProtection } from "../middlewares/csrf.middleware.js";
 
 export const inventoryRoutes: FastifyPluginAsyncZod = async (fastify) => {
+  fastify.addHook('preHandler', csrfProtection());
 
   fastify.post('/', { onRequest: [fastify.authenticate], preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])], schema: { body: InventorySchema.create } }, async (request, reply) => {
     try {
