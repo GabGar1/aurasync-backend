@@ -10,6 +10,7 @@ const OrderItemBaseSchema = z.object({
   unit_cost: z.number().min(0).default(0),
   unit_packaging_cost: z.number().min(0).default(0),
   unit_platform_fee: z.number().min(0).default(0),
+  has_promotional_price: z.boolean().nullable().optional(),
 
   status: z.boolean().default(true),
   created_at: z.date().optional(),
@@ -27,7 +28,7 @@ const OrderItemCreateSchema = z.object({
 });
 
 
-const OrderStatusEnum = z.enum(['PENDING', 'PAID', 'SHIPPED', 'DELIVERED', 'CANCELED']);
+const OrderStatusEnum = z.enum(['PENDING', 'PAID', 'SHIPPED', 'DELIVERED', 'CANCELED', 'open', 'closed', 'cancelled', 'paid', 'shipped']);
 
 export const OrderSchema = {
   base: z.object({
@@ -62,6 +63,9 @@ export const OrderSchema = {
     discount_amount: z.number().nullable().optional(),
     shipping_cost_customer: z.number().nullable().optional(),
     shipping_cost_owner: z.number().nullable().optional(),
+    payment_status: z.string().nullable().optional(),
+    fulfillment_status: z.string().nullable().optional(),
+    has_free_shipping: z.boolean().nullable().optional(),
     paid_at: z.date().nullable().optional(),
     shipped_at: z.date().nullable().optional(),
     completed_at: z.date().nullable().optional(),
@@ -94,6 +98,9 @@ export const OrderSchema = {
       discount_amount: z.number().nullable().optional(),
       shipping_cost_customer: z.number().nullable().optional(),
       shipping_cost_owner: z.number().nullable().optional(),
+      payment_status: z.string().nullable().optional(),
+      fulfillment_status: z.string().nullable().optional(),
+      has_free_shipping: z.boolean().nullable().optional(),
       paid_at: z.date().nullable().optional(),
       shipped_at: z.date().nullable().optional(),
       completed_at: z.date().nullable().optional(),

@@ -12,6 +12,9 @@ export interface Order {
   discount_amount: number | null;
   shipping_cost_customer: number | null;
   shipping_cost_owner: number | null;
+  payment_status: string | null;
+  fulfillment_status: string | null;
+  has_free_shipping: boolean | null;
   paid_at: Date | null;
   shipped_at: Date | null;
   completed_at: Date | null;
@@ -43,6 +46,7 @@ export interface OrderItem {
   unit_cost: number;
   unit_packaging_cost: number;
   unit_platform_fee: number;
+  has_promotional_price: boolean | null;
   status: boolean;
   created_at: Date;
   updated_at: Date;
@@ -73,6 +77,7 @@ export interface NuvemshopOrderItemData {
   variant_id: string; // Nuvemshop's variant ID
   quantity: number;
   price: number;
+  has_promotional_price?: boolean;
 }
 
 export interface NuvemshopOrderData {
@@ -86,6 +91,9 @@ export interface NuvemshopOrderData {
   discount?: string;
   shipping_cost_customer?: string;
   shipping_cost_owner?: string;
+  payment_status?: string;
+  fulfillments?: Array<{ status: string }>;
+  free_shipping_config?: { cart_has_free_shipping?: boolean };
   paid_at?: string | null;
   shipped_at?: string | null;
   completed_at?: { date: string; timezone_type: number; timezone: string } | null;
@@ -208,6 +216,9 @@ export class OrderRepository {
         shipping_cost_owner: data.shipping_cost_owner
           ? parseFloat(data.shipping_cost_owner)
           : null,
+        payment_status: data.payment_status || null,
+        fulfillment_status: data.fulfillments?.[0]?.status || null,
+        has_free_shipping: data.free_shipping_config?.cart_has_free_shipping ?? null,
         paid_at: data.paid_at ? new Date(data.paid_at) : null,
         shipped_at: data.shipped_at ? new Date(data.shipped_at) : null,
         completed_at: data.completed_at?.date
@@ -280,6 +291,7 @@ export class OrderRepository {
             unit_cost: internalVariant.cost_price,
             unit_packaging_cost: internalVariant.packaging_cost,
             unit_platform_fee: (nuvemshopItem.price * (internalVariant.platform_fee_percent || 0)) / 100,
+            has_promotional_price: nuvemshopItem.has_promotional_price ?? null,
             status: true, // Mark as active
           })
           .returning('*');
