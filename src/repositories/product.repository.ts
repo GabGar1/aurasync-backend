@@ -25,6 +25,7 @@ export interface ProductVariant {
   packaging_cost: number;
   platform_fee_percent: number;
   fixed_fee: number;
+  has_promotional_price: boolean | null;
   weight: number | null;
   height: number | null;
   width: number | null;
@@ -48,6 +49,7 @@ export interface CreateVariantInput {
   packaging_cost?: number;
   platform_fee_percent?: number;
   fixed_fee?: number;
+  has_promotional_price?: boolean;
   weight?: number;
   height?: number;
   width?: number;
@@ -80,6 +82,7 @@ export interface NuvemshopVariantData {
   packaging_cost?: number;
   platform_fee_percent?: number;
   fixed_fee?: number;
+  has_promotional_price?: boolean;
   weight?: number;
   height?: number;
   width?: number;
