@@ -258,11 +258,14 @@ describe("OrderService Integration Tests", () => {
         status: "PAID",
         total: 125.66,
         items: [
-          { variant_id: nuvemshopVariantId, quantity: 2, price: 49.90 },
+          { variant_id: nuvemshopVariantId, quantity: 2, price: 49.90, has_promotional_price: true },
         ],
         discount: "49.40",
         shipping_cost_customer: "25.36",
         shipping_cost_owner: "25.36",
+        payment_status: "paid",
+        fulfillments: [{ status: "shipped" }],
+        free_shipping_config: { cart_has_free_shipping: true },
         paid_at: "2026-05-13T17:49:03+0000",
         shipped_at: null,
         completed_at: {
@@ -325,6 +328,10 @@ describe("OrderService Integration Tests", () => {
       assert.strictEqual(order.utm_term, "120240092594710582");
       assert.strictEqual(order.storefront, "mobile");
       assert.strictEqual(order.customer_email, "ninicksacf@gmail.com");
+      assert.strictEqual(order.payment_status, "paid");
+      assert.strictEqual(order.fulfillment_status, "shipped");
+      assert.strictEqual(order.has_free_shipping, true);
+      assert.strictEqual(order.items[0]!.has_promotional_price, true);
 
       // Cleanup order
       await db("orders").where({ id: order.id }).del();
@@ -370,6 +377,10 @@ describe("OrderService Integration Tests", () => {
       assert.strictEqual(order.payment_method, null);
       assert.strictEqual(order.utm_source, null);
       assert.strictEqual(order.customer_email, null);
+      assert.strictEqual(order.payment_status, null);
+      assert.strictEqual(order.fulfillment_status, null);
+      assert.strictEqual(order.has_free_shipping, null);
+      assert.strictEqual(order.items[0]!.has_promotional_price, null);
 
       // Cleanup
       await db("orders").where({ id: order.id }).del();
