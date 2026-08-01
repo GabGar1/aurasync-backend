@@ -3,6 +3,7 @@ import assert from "node:assert";
 import Fastify, { type FastifyInstance } from "fastify";
 import fastifyJwt from "@fastify/jwt";
 import { serializerCompiler, validatorCompiler } from "fastify-type-provider-zod";
+import fastifyCookie from "@fastify/cookie";
 import type { FastifyRequest, FastifyReply } from "fastify";
 import { userRoutes } from "./user.router.js";
 import { db } from "../lib/db.js";
@@ -24,6 +25,7 @@ const buildApp = async (): Promise<FastifyInstance> => {
   const app = Fastify();
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
+  await app.register(fastifyCookie);
   await app.register(fastifyJwt, { secret: "test-secret" });
   app.decorate("authenticate", async (request: FastifyRequest, reply: FastifyReply) => {
     try {
