@@ -261,6 +261,7 @@ export class OrderRepository {
         total_cost: costResult.total_cost,
         total_profit: costResult.total_profit,
         margin_percent: costResult.margin_percent,
+        updated_at: new Date(),
         items: insertedItems,
       };
     });
@@ -373,6 +374,13 @@ export class OrderRepository {
         shipping_cost_owner: data.shipping_cost_owner ? parseFloat(data.shipping_cost_owner) : 0,
         discount_amount: data.discount ? parseFloat(data.discount) : 0,
       });
+      // Freeze the cost columns of previously-synced items so re-syncs do not
+      // recompute them from the current component config.
+      const frozenByVariant = new Map<string, any>();
+      if (existingOrder) {
+        const prevItems = await trx(this.itemsTable).where({ order_id: order.id, status: true });
+        for (const pi of prevItems) frozenByVariant.set(pi.variant_id, pi);
+      }
       // Deactivate existing items to handle updates/removals
       await trx(this.itemsTable)
         .where({ order_id: order.id })
@@ -389,29 +397,46 @@ export class OrderRepository {
 
         const snapshot = costResult.items[engineIdx]!;
         engineIdx++;
+        const base = applySnapshot({
+          order_id: order.id,
+          variant_id: internalVariant.id,
+          quantity: nuvemshopItem.quantity,
+          unit_price: nuvemshopItem.price,
+          has_promotional_price: nuvemshopItem.has_promotional_price ?? null,
+          status: true,
+        }, snapshot);
+        const frozen = frozenByVariant.get(internalVariant.id);
+        if (frozen) {
+          Object.assign(base, {
+            unit_cost: frozen.unit_cost,
+            unit_packaging_cost: frozen.unit_packaging_cost,
+            unit_platform_fee: frozen.unit_platform_fee,
+            unit_tax: frozen.unit_tax,
+            unit_shipping_cost: frozen.unit_shipping_cost,
+            unit_operational_cost: frozen.unit_operational_cost,
+            unit_marketing_cost: frozen.unit_marketing_cost,
+            unit_other_cost: frozen.unit_other_cost,
+            unit_total_cost: frozen.unit_total_cost,
+            unit_profit: frozen.unit_profit,
+            margin_percent: frozen.margin_percent,
+            cost_breakdown: JSON.stringify(frozen.cost_breakdown),
+          });
+        }
         const [item] = await trx(this.itemsTable)
-          .insert(applySnapshot({
-            order_id: order.id,
-            variant_id: internalVariant.id,
-            quantity: nuvemshopItem.quantity,
-            unit_price: nuvemshopItem.price,
-            has_promotional_price: nuvemshopItem.has_promotional_price ?? null,
-            status: true,
-          }, snapshot))
+          .insert(base)
           .returning('*');
         processedItems.push(item);
       }
 
-      await trx(this.ordersTable)
-        .where({ id: order.id })
-        .update({
-          total_cost: costResult.total_cost,
-          total_profit: costResult.total_profit,
-          margin_percent: costResult.margin_percent,
-          updated_at: new Date(),
-        });
+      const insertedForTotals = await trx(this.itemsTable).where({ order_id: order.id, status: true });
+      const round2 = (n: number) => Math.round(n * 100) / 100;
+      const total_cost = round2(insertedForTotals.reduce((s, i) => s + Number(i.unit_total_cost) * i.quantity, 0));
+      const netRevenue = Number(order.total_amount) - (order.discount_amount ? Number(order.discount_amount) : 0);
+      const total_profit = round2(netRevenue - total_cost);
+      const margin_percent = netRevenue > 0 ? round2((total_profit / netRevenue) * 100) : 0;
+      await trx(this.ordersTable).where({ id: order.id }).update({ total_cost, total_profit, margin_percent, updated_at: new Date() });
 
-      return { ...order, total_cost: costResult.total_cost, total_profit: costResult.total_profit, margin_percent: costResult.margin_percent, items: processedItems };
+      return { ...order, total_cost, total_profit, margin_percent, updated_at: new Date(), items: processedItems };
     });
   }
 

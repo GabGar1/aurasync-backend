@@ -60,6 +60,7 @@ export interface OrderCostResult {
 const round2 = (n: number): number => Math.round(n * 100) / 100;
 
 interface PerOrderFee {
+  id: string | null;
   value: number;
   category: CostComponentCategory;
   name: string;
@@ -105,7 +106,7 @@ function computeItemBase(input: CostEngineItemInput): ItemBaseCost {
     if (c.type === "MONTHLY") continue;
 
     if (c.type === "PER_ORDER") {
-      perOrderFees.push({ value: c.value, category: c.category, name: c.name });
+      perOrderFees.push({ id: c.id, value: c.value, category: c.category, name: c.name });
       continue;
     }
 
@@ -159,7 +160,8 @@ export function computeOrderCosts(
     }
     for (const f of allPerOrderFees) {
       const allocated = round2((f.value * share) / input.quantity);
-      allocationBreakdown.push({ component_id: null, name: `${f.name} (rateado)`, type: "ALLOCATION", category: f.category, unit_value: allocated, quantity: 1, line_total: allocated });
+      if (allocated === 0) continue;
+      allocationBreakdown.push({ component_id: f.id, name: `${f.name} (rateado)`, type: "ALLOCATION", category: f.category, unit_value: allocated, quantity: 1, line_total: allocated });
     }
 
     const unit_total_cost = round2(

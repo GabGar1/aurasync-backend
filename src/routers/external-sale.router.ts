@@ -25,6 +25,7 @@ export const externalSaleRoutes: FastifyPluginAsyncZod = async (fastify) => {
 
   fastify.get('/products', {
     onRequest: [fastify.authenticate],
+    preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])],
     schema: {
       querystring: z.object({
         page: z.coerce.number().optional(),
@@ -46,6 +47,7 @@ export const externalSaleRoutes: FastifyPluginAsyncZod = async (fastify) => {
 
   fastify.get('/customers', {
     onRequest: [fastify.authenticate],
+    preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])],
     schema: {
       querystring: z.object({
         page: z.coerce.number().optional(),

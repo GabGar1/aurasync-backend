@@ -20,43 +20,35 @@ export class CustomerRepository {
 
   async upsertFromOrder(data: UpsertCustomerInput) {
     if (!data.email) {
-      const [created] = await db(this.table).insert({
-        email: null,
+      return null;
+    }
+
+    const merge: Record<string, unknown> = {
+      name: data.name,
+      last_purchase_at: data.date,
+      updated_at: new Date(),
+    };
+    if (data.city != null) merge.city = data.city;
+    if (data.province != null) merge.province = data.province;
+
+    const [row] = await db(this.table)
+      .insert({
+        email: data.email,
         name: data.name,
+        city: data.city ?? null,
+        province: data.province ?? null,
+        origin: data.storefront ?? null,
+        utm_source: data.utm_source ?? null,
+        utm_medium: data.utm_medium ?? null,
+        utm_campaign: data.utm_campaign ?? null,
         first_purchase_at: data.date,
         last_purchase_at: data.date,
-      }).returning('*');
-      return created;
-    }
+      })
+      .onConflict("email")
+      .merge(merge)
+      .returning("*");
 
-    const existing = await db(this.table).where({ email: data.email }).whereNull('deleted_at').first();
-    if (existing) {
-      const [updated] = await db(this.table)
-        .where({ id: existing.id })
-        .update({
-          name: data.name,
-          city: data.city ?? existing.city,
-          province: data.province ?? existing.province,
-          last_purchase_at: data.date,
-          updated_at: new Date(),
-        })
-        .returning('*');
-      return updated;
-    }
-
-    const [created] = await db(this.table).insert({
-      email: data.email,
-      name: data.name,
-      city: data.city ?? null,
-      province: data.province ?? null,
-      origin: data.storefront ?? null,
-      utm_source: data.utm_source ?? null,
-      utm_medium: data.utm_medium ?? null,
-      utm_campaign: data.utm_campaign ?? null,
-      first_purchase_at: data.date,
-      last_purchase_at: data.date,
-    }).returning('*');
-    return created;
+    return row;
   }
 
   async findAll(page = 1, limit = 20, filters: { search?: string } = {}) {

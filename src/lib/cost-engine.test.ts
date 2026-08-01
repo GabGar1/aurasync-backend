@@ -95,4 +95,27 @@ describe("CostEngine", () => {
     const result = computeOrderCosts([item], { shipping_cost_owner: 0, discount_amount: 0 });
     assert.strictEqual(result.items[0]!.unit_operational_cost, 0);
   });
+
+  it("produces distinct snapshots for duplicate variant_ids aligned by index", () => {
+    const items = [
+      baseItem({ variant_id: "v-dup", unit_price: 100, quantity: 1, components: [] }),
+      baseItem({ variant_id: "v-dup", unit_price: 200, quantity: 3, components: [] }),
+    ];
+    const result = computeOrderCosts(items, { shipping_cost_owner: 0, discount_amount: 0 });
+    assert.strictEqual(result.items.length, 2);
+    assert.strictEqual(result.items[0]!.unit_platform_fee, 3); // 100 * 3%
+    assert.strictEqual(result.items[1]!.unit_platform_fee, 6); // 200 * 3%
+    assert.strictEqual(result.items[0]!.unit_total_cost, 45);
+    assert.strictEqual(result.items[1]!.unit_total_cost, 48);
+    assert.strictEqual(result.total_cost, 189); // 45 + 48 * 3
+  });
+
+  it("does not emit a zero-value allocation breakdown row when share is 0", () => {
+    const item = baseItem({ unit_price: 0, components: [
+      { id: "c1", name: "Taxa Plataforma", type: "PER_ORDER", category: "FEE", value: 10, calculation_base: "PRICE", quantity: 1 },
+    ] });
+    const result = computeOrderCosts([item], { shipping_cost_owner: 0, discount_amount: 0 });
+    const breakdown = result.items[0]!.cost_breakdown;
+    assert.ok(!breakdown.some(e => e.type === "ALLOCATION" || e.name.endsWith("(rateado)")));
+  });
 });

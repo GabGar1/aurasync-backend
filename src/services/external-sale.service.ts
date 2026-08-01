@@ -63,28 +63,53 @@ export class ExternalSaleService {
 
     const order = await externalSaleRepository.createExternalSale(input, costResult);
 
-    await customerService.upsertFromOrder({
-      name: validated.customer_name,
-      email: validated.customer_email ?? null,
-      city: null,
-      province: null,
-      payment_method: validated.payment_method ?? null,
-      gateway: validated.gateway ?? null,
-      storefront: 'EXTERNAL',
-      utm_source: null,
-      utm_medium: null,
-      utm_campaign: null,
-      total: Number(order.total_amount),
-      date: order.created_at,
-    });
+    const itemMoneyFields = [
+      'unit_price', 'unit_cost', 'unit_packaging_cost', 'unit_platform_fee',
+      'unit_tax', 'unit_shipping_cost', 'unit_operational_cost', 'unit_marketing_cost',
+      'unit_other_cost', 'unit_total_cost', 'unit_profit', 'margin_percent',
+    ] as const;
+    const orderMoneyFields = ['total_amount', 'total_cost', 'total_profit', 'margin_percent'] as const;
+    const orderOptionalMoneyFields = ['discount_amount', 'shipping_cost_owner', 'shipping_cost_customer'] as const;
+
+    const orderResponse = {
+      ...order,
+      items: (order.items || []).map((item: Record<string, unknown>) => {
+        const coerced: Record<string, unknown> = { ...item };
+        for (const f of itemMoneyFields) coerced[f] = Number(coerced[f]);
+        return coerced;
+      }),
+    };
+    for (const f of orderMoneyFields) orderResponse[f] = Number(orderResponse[f]);
+    for (const f of orderOptionalMoneyFields) {
+      if (orderResponse[f] != null) orderResponse[f] = Number(orderResponse[f]);
+    }
+
+    try {
+      await customerService.upsertFromOrder({
+        name: validated.customer_name,
+        email: validated.customer_email ?? null,
+        city: null,
+        province: null,
+        payment_method: validated.payment_method ?? null,
+        gateway: validated.gateway ?? null,
+        storefront: 'EXTERNAL',
+        utm_source: null,
+        utm_medium: null,
+        utm_campaign: null,
+        total: orderResponse.total_amount,
+        date: orderResponse.created_at,
+      });
+    } catch (error) {
+      console.error("Failed to upsert customer:", error);
+    }
 
     websocketManager.broadcast({
       event: 'orders_updated',
-      message: `External sale ${order.id} created.`,
-      orderId: order.id,
+      message: `External sale ${orderResponse.id} created.`,
+      orderId: orderResponse.id,
     });
 
-    return order;
+    return orderResponse;
   }
 }
 

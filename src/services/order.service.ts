@@ -114,20 +114,24 @@ export class OrderService {
   async upsertOrderFromNuvemshop(data: NuvemshopOrderData): Promise<EnrichedOrder> {
     const order = await orderRepository.upsertOrderFromNuvemshop(data);
 
-    await customerService.upsertFromOrder({
-      email: data.contact_email ?? null,
-      name: data.customer?.name ?? 'Cliente',
-      city: data.shipping_address?.city ?? null,
-      province: data.shipping_address?.province ?? null,
-      payment_method: data.payment_details?.method ?? null,
-      gateway: data.gateway ?? null,
-      storefront: data.storefront ?? null,
-      utm_source: data.customer_visit?.utm_parameters?.utm_source ?? null,
-      utm_medium: data.customer_visit?.utm_parameters?.utm_medium ?? null,
-      utm_campaign: data.customer_visit?.utm_parameters?.utm_campaign ?? null,
-      total: Number(order.total_amount),
-      date: order.created_at,
-    });
+    try {
+      await customerService.upsertFromOrder({
+        email: data.contact_email ?? null,
+        name: data.customer?.name ?? 'Cliente',
+        city: data.shipping_address?.city ?? null,
+        province: data.shipping_address?.province ?? null,
+        payment_method: data.payment_details?.method ?? null,
+        gateway: data.gateway ?? null,
+        storefront: data.storefront ?? null,
+        utm_source: data.customer_visit?.utm_parameters?.utm_source ?? null,
+        utm_medium: data.customer_visit?.utm_parameters?.utm_medium ?? null,
+        utm_campaign: data.customer_visit?.utm_parameters?.utm_campaign ?? null,
+        total: Number(order.total_amount),
+        date: order.created_at,
+      });
+    } catch (error) {
+      console.error("Failed to upsert customer:", error);
+    }
 
     return enrichOrder(order);
   }

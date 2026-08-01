@@ -17,8 +17,6 @@ export const dashboardRoutes: FastifyPluginAsync = async (app) => {
       schema: {
         querystring: z.object({
           days: z.coerce.number().default(30),
-          start_date: z.string().optional(),
-          end_date: z.string().optional(),
         }),
       },
     },
