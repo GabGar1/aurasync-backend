@@ -13,6 +13,7 @@ import { dashboardRoutes } from './routers/dashboard.router.js';
 import { authRoutes } from './routers/auth.router.js';
 import { costRoutes } from './routers/cost.router.js';
 import { externalSaleRoutes } from './routers/external-sale.router.js';
+import { customerRoutes } from './routers/customer.router.js';
 import {fastifySwagger} from "@fastify/swagger";
 import {fastifySwaggerUi} from "@fastify/swagger-ui";
 import {fastifyCors} from "@fastify/cors";
@@ -98,6 +99,7 @@ app.register(dashboardRoutes, { prefix: '/api' });
 app.register(authRoutes, { prefix: '/api/auth' });
 app.register(costRoutes, { prefix: '/api/cost-components' });
 app.register(externalSaleRoutes, { prefix: '/api/external-sales' });
+app.register(customerRoutes, { prefix: '/api/customers' });
 
 const start = async () => {
   try {
