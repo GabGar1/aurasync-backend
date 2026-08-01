@@ -9,6 +9,10 @@ console.log('TOKEN EXISTE?:', !!process.env.NUVEMSHOP_ACCESS_TOKEN);
 console.log('========================================================');
 
 class NuvemshopService {
+  // Bounded concurrency: each upsert holds a pooled DB connection, so batches
+  // must stay well below the knex pool max (10) to avoid pool exhaustion.
+  private static readonly BATCH_SIZE = 5;
+
   private get baseUrl() {
     return `https://api.tiendanube.com/v1/${process.env.NUVEMSHOP_STORE_ID}`;
   }
@@ -88,7 +92,12 @@ class NuvemshopService {
         return productService.upsertProductFromNuvemshop(productData as any);
       });
 
-      const results = await Promise.all(upsertPromises);
+      const results = [];
+      for (let i = 0; i < upsertPromises.length; i += NuvemshopService.BATCH_SIZE) {
+        const batch = upsertPromises.slice(i, i + NuvemshopService.BATCH_SIZE);
+        const batchResults = await Promise.all(batch);
+        results.push(...batchResults);
+      }
 
       websocketManager.broadcast({
         event: 'products_updated',
@@ -171,7 +180,14 @@ class NuvemshopService {
         return orderService.upsertOrderFromNuvemshop(orderData as any);
       });
 
-      const results = await Promise.all(upsertPromises);
+      // Process in bounded batches so concurrent transactions never exhaust the
+      // DB connection pool (each upsert holds one pooled connection).
+      const results = [];
+      for (let i = 0; i < upsertPromises.length; i += NuvemshopService.BATCH_SIZE) {
+        const batch = upsertPromises.slice(i, i + NuvemshopService.BATCH_SIZE);
+        const batchResults = await Promise.all(batch);
+        results.push(...batchResults);
+      }
 
       websocketManager.broadcast({
         event: 'orders_updated',

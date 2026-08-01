@@ -186,7 +186,7 @@ export class OrderRepository {
       const variantMap = new Map(variants.map(v => [v.id, v]));
       const productIds = [...new Set(variants.map(v => v.product_id))];
       const componentsByProduct = new Map<string, Array<any>>();
-      for (const row of await costRepository.getComponentsByProductIds(productIds)) {
+      for (const row of await costRepository.getComponentsByProductIds(productIds, trx)) {
         if (!componentsByProduct.has(row.product_id)) componentsByProduct.set(row.product_id, []);
         componentsByProduct.get(row.product_id)!.push({
           id: row.id, name: row.name, type: row.type, category: row.category,
@@ -344,7 +344,7 @@ export class OrderRepository {
 
       const productIds = [...new Set(internalVariants.map(v => v.product_id))];
       const componentsByProduct = new Map<string, Array<{ id: string; name: string; type: string; category: string; value: number; calculation_base: string; quantity: number }>>();
-      for (const row of await costRepository.getComponentsByProductIds(productIds)) {
+      for (const row of await costRepository.getComponentsByProductIds(productIds, trx)) {
         if (!componentsByProduct.has(row.product_id)) componentsByProduct.set(row.product_id, []);
         componentsByProduct.get(row.product_id)!.push({
           id: row.id, name: row.name, type: row.type, category: row.category,

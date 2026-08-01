@@ -1,4 +1,5 @@
 import { db } from '../lib/db.js';
+import type { Knex } from 'knex';
 import type { CostComponent, CostComponentCreate, CostComponentUpdate, CostAssociationCreate } from '../schemas/cost.schema.js';
 
 export interface ComponentWithQuantity {
@@ -103,9 +104,10 @@ export class CostRepository {
     }));
   }
 
-  async getComponentsByProductIds(productIds: string[]): Promise<Array<{ product_id: string; quantity: number } & ComponentWithQuantity>> {
+  async getComponentsByProductIds(productIds: string[], trx?: Knex.Transaction): Promise<Array<{ product_id: string; quantity: number } & ComponentWithQuantity>> {
     if (productIds.length === 0) return [];
-    return db(this.associationTable)
+    const query = (trx ?? db);
+    return query(this.associationTable)
       .whereIn(`${this.associationTable}.product_id`, productIds)
       .join(this.table, `${this.table}.id`, `${this.associationTable}.cost_component_id`)
       .whereNull(`${this.table}.deleted_at`)
