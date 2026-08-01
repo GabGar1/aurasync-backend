@@ -195,7 +195,8 @@ export class OrderRepository {
       }
 
       const engineItems: CostEngineItemInput[] = items.map(item => {
-        const v = variantMap.get(item.variant_id)!;
+        const v = variantMap.get(item.variant_id);
+        if (!v) throw new Error(`Product variant ${item.variant_id} not found`);
         return {
           variant_id: item.variant_id,
           product_id: v.product_id,
@@ -209,10 +210,9 @@ export class OrderRepository {
       });
 
       const costResult = computeOrderCosts(engineItems, { shipping_cost_owner: 0, discount_amount: 0 });
-      const snapshotByVariant = new Map(costResult.items.map(i => [i.variant_id, i]));
 
       const insertedItems = await trx(this.itemsTable)
-        .insert(items.map(item => applySnapshot({ ...item, order_id: order.id }, snapshotByVariant.get(item.variant_id)!)))
+        .insert(items.map((item, idx) => applySnapshot({ ...item, order_id: order.id }, costResult.items[idx]!)))
         .returning('*');
 
       for (const item of items) {
@@ -246,6 +246,15 @@ export class OrderRepository {
             type: 'SALE',
           });
       }
+
+      await trx(this.ordersTable)
+        .where({ id: order.id })
+        .update({
+          total_cost: costResult.total_cost,
+          total_profit: costResult.total_profit,
+          margin_percent: costResult.margin_percent,
+          updated_at: new Date(),
+        });
 
       return {
         ...order,
@@ -364,14 +373,13 @@ export class OrderRepository {
         shipping_cost_owner: data.shipping_cost_owner ? parseFloat(data.shipping_cost_owner) : 0,
         discount_amount: data.discount ? parseFloat(data.discount) : 0,
       });
-      const snapshotByVariant = new Map(costResult.items.map(i => [i.variant_id, i]));
-
       // Deactivate existing items to handle updates/removals
       await trx(this.itemsTable)
         .where({ order_id: order.id })
         .update({ status: false });
 
       const processedItems: OrderItem[] = [];
+      let engineIdx = 0;
       for (const nuvemshopItem of nuvemshopItems) {
         const internalVariant = variantMap.get(nuvemshopItem.variant_id);
         if (!internalVariant) {
@@ -379,7 +387,8 @@ export class OrderRepository {
           continue;
         }
 
-        const snapshot = snapshotByVariant.get(internalVariant.id)!;
+        const snapshot = costResult.items[engineIdx]!;
+        engineIdx++;
         const [item] = await trx(this.itemsTable)
           .insert(applySnapshot({
             order_id: order.id,

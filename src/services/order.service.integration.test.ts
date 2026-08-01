@@ -428,6 +428,10 @@ describe("OrderService Integration Tests", () => {
       assert.ok((item.cost_breakdown as any[]).length >= 2);
       assert.strictEqual(Number(order.total_cost), 43);
       assert.strictEqual(Number(order.total_profit), 57);
+
+      const row = await db("orders").where({ id: order.id }).first();
+      assert.strictEqual(Number(row.total_cost), 43);
+      assert.strictEqual(Number(row.total_profit), 57);
     });
   });
 });
