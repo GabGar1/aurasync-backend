@@ -135,4 +135,27 @@ describe("DashboardService Integration Tests", () => {
     assert.strictEqual(result.repeat_customers.repeat_customers, 0);
     assert.strictEqual(result.repeat_customers.repeat_rate, 0);
   });
+
+  it("excludes CANCELED orders from metrics", async () => {
+    await db("orders").insert({
+      id: "00000000-0000-0000-0000-000000000004",
+      customer_name: "Canceled Customer",
+      status: "CANCELED",
+      total_amount: 999,
+      created_at: new Date(),
+    });
+    const result = await dashboardService.getOrdersStats(30);
+    assert.strictEqual(result.average_order_value, 200); // only the PAID order
+    const byStatus = result.by_status.find((s: any) => s.status === "CANCELED");
+    assert.strictEqual(byStatus, undefined);
+  });
+
+  it("respects explicit date filters", async () => {
+    const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const result = await dashboardService.getMarketingStats(30, {
+      start: new Date(tomorrow),
+      end: new Date(tomorrow),
+    });
+    assert.strictEqual(result.by_storefront.length, 0);
+  });
 });

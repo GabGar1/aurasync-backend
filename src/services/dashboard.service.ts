@@ -20,12 +20,12 @@ export class DashboardService {
     };
   }
 
-  async getMarketingStats(days = 30) {
-    return dashboardRepository.getMarketingStats(days);
+  async getMarketingStats(days = 30, dates: { start?: Date; end?: Date } = {}) {
+    return dashboardRepository.getMarketingStats(days, dates);
   }
 
-  async getOrdersStats(days = 30) {
-    return dashboardRepository.getOrdersStats(days);
+  async getOrdersStats(days = 30, dates: { start?: Date; end?: Date } = {}) {
+    return dashboardRepository.getOrdersStats(days, dates);
   }
 }
 

@@ -1,6 +1,16 @@
 import { db } from "../lib/db.js";
 
+function validOrderFilter(query: any) {
+  return query.whereNull('orders.deleted_at').where('orders.status', '<>', 'CANCELED');
+}
+
 export class DashboardRepository {
+  private dateWindow(days: number, dates: { start?: Date; end?: Date } = {}) {
+    const end = dates.end ?? new Date();
+    const start = dates.start ?? new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    return { start, end };
+  }
+
   async getLowStock(threshold = 5) {
     return db("product_variants")
       .join("products", "products.id", "product_variants.product_id")
@@ -31,6 +41,7 @@ export class DashboardRepository {
           .from("order_items")
           .join("orders", "orders.id", "order_items.order_id")
           .where("orders.created_at", ">=", cutoff)
+          .andWhere("orders.status", "<>", "CANCELED")
           .whereNull("orders.deleted_at");
       })
       .select(
@@ -48,6 +59,7 @@ export class DashboardRepository {
     const salesSubquery = db("order_items")
       .join("orders", "orders.id", "order_items.order_id")
       .where("orders.created_at", ">=", cutoff)
+      .andWhere("orders.status", "<>", "CANCELED")
       .whereNull("orders.deleted_at")
       .groupBy("order_items.variant_id")
       .select(
@@ -105,6 +117,7 @@ export class DashboardRepository {
           .from("order_items")
           .join("orders", "orders.id", "order_items.order_id")
           .where("orders.created_at", ">=", cutoff)
+          .andWhere("orders.status", "<>", "CANCELED")
           .whereNull("orders.deleted_at");
       })
       .select(
@@ -119,13 +132,14 @@ export class DashboardRepository {
       .orderBy("days_without_sale", "desc");
   }
 
-  async getMarketingStats(days: number) {
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - days);
+  async getMarketingStats(days = 30, dates: { start?: Date; end?: Date } = {}) {
+    const { start, end } = this.dateWindow(days, dates);
 
-    const baseQuery = db("orders")
-      .where("orders.created_at", ">=", cutoff)
-      .whereNull("orders.deleted_at");
+    const baseQuery = validOrderFilter(
+      db("orders")
+        .where("orders.created_at", ">=", start)
+        .andWhere("orders.created_at", "<=", end)
+    );
 
     const byStorefront = await baseQuery
       .clone()
@@ -188,13 +202,14 @@ export class DashboardRepository {
     };
   }
 
-  async getOrdersStats(days: number) {
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - days);
+  async getOrdersStats(days = 30, dates: { start?: Date; end?: Date } = {}) {
+    const { start, end } = this.dateWindow(days, dates);
 
-    const baseQuery = db("orders")
-      .where("orders.created_at", ">=", cutoff)
-      .whereNull("orders.deleted_at");
+    const baseQuery = validOrderFilter(
+      db("orders")
+        .where("orders.created_at", ">=", start)
+        .andWhere("orders.created_at", "<=", end)
+    );
 
     const byHour = await baseQuery
       .clone()
@@ -210,7 +225,9 @@ export class DashboardRepository {
       .join("product_variants", "product_variants.id", "order_items.variant_id")
       .join("products", "products.id", "product_variants.product_id")
       .join("orders", "orders.id", "order_items.order_id")
-      .where("orders.created_at", ">=", cutoff)
+      .where("orders.created_at", ">=", start)
+      .andWhere("orders.created_at", "<=", end)
+      .where("orders.status", "<>", "CANCELED")
       .whereNull("orders.deleted_at")
       .whereNull("product_variants.deleted_at")
       .whereNull("products.deleted_at")
@@ -259,7 +276,9 @@ export class DashboardRepository {
       .first();
 
     const repeatRow = await db("orders")
-      .where("orders.created_at", ">=", cutoff)
+      .where("orders.created_at", ">=", start)
+      .andWhere("orders.created_at", "<=", end)
+      .where("orders.status", "<>", "CANCELED")
       .whereNull("orders.deleted_at")
       .whereNotNull("customer_email")
       .groupBy("customer_email")
