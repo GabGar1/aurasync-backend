@@ -1,11 +1,36 @@
 import { db } from '../lib/db.js';
 import type { Knex } from 'knex';
+import { costRepository } from './cost.repository.js';
+import { computeOrderCosts, type CostEngineItemInput, type ItemCostSnapshot } from '../lib/cost-engine.js';
+
+// helper: converts a plain DB item row + computed snapshot into the insert payload
+function applySnapshot(base: Record<string, unknown>, snapshot: ItemCostSnapshot): Record<string, unknown> {
+  return {
+    ...base,
+    unit_cost: snapshot.unit_cost,
+    unit_packaging_cost: snapshot.unit_packaging_cost,
+    unit_platform_fee: snapshot.unit_platform_fee,
+    unit_tax: snapshot.unit_tax,
+    unit_shipping_cost: snapshot.unit_shipping_cost,
+    unit_operational_cost: snapshot.unit_operational_cost,
+    unit_marketing_cost: snapshot.unit_marketing_cost,
+    unit_other_cost: snapshot.unit_other_cost,
+    unit_total_cost: snapshot.unit_total_cost,
+    unit_profit: snapshot.unit_profit,
+    margin_percent: snapshot.margin_percent,
+    cost_breakdown: JSON.stringify(snapshot.cost_breakdown),
+  };
+}
 
 // --- INTERFACES ---
 
 export interface Order {
   id: string;
   nuvemshop_order_id: string | null;
+  source: string;
+  total_cost: number;
+  total_profit: number;
+  margin_percent: number;
   customer_name: string | null;
   status: string;
   total_amount: number;
@@ -46,6 +71,15 @@ export interface OrderItem {
   unit_cost: number;
   unit_packaging_cost: number;
   unit_platform_fee: number;
+  unit_tax: number;
+  unit_shipping_cost: number;
+  unit_operational_cost: number;
+  unit_marketing_cost: number;
+  unit_other_cost: number;
+  unit_total_cost: number;
+  unit_profit: number;
+  margin_percent: number;
+  cost_breakdown: any[] | null;
   has_promotional_price: boolean | null;
   status: boolean;
   created_at: Date;
@@ -146,13 +180,39 @@ export class OrderRepository {
         })
         .returning('*');
 
-      const itemsToInsert = items.map(item => ({
-        ...item,
-        order_id: order.id
-      }));
+      // after inserting the order and BEFORE stock deduction, resolve variants + components
+      const variantIds = items.map(i => i.variant_id);
+      const variants = await trx('product_variants').whereIn('id', variantIds).select('id', 'product_id', 'cost_price', 'packaging_cost', 'platform_fee_percent');
+      const variantMap = new Map(variants.map(v => [v.id, v]));
+      const productIds = [...new Set(variants.map(v => v.product_id))];
+      const componentsByProduct = new Map<string, Array<any>>();
+      for (const row of await costRepository.getComponentsByProductIds(productIds)) {
+        if (!componentsByProduct.has(row.product_id)) componentsByProduct.set(row.product_id, []);
+        componentsByProduct.get(row.product_id)!.push({
+          id: row.id, name: row.name, type: row.type, category: row.category,
+          value: Number(row.value), calculation_base: row.calculation_base, quantity: row.quantity,
+        });
+      }
+
+      const engineItems: CostEngineItemInput[] = items.map(item => {
+        const v = variantMap.get(item.variant_id)!;
+        return {
+          variant_id: item.variant_id,
+          product_id: v.product_id,
+          unit_price: item.unit_price,
+          quantity: item.quantity,
+          product_cost: Number(v.cost_price || 0),
+          legacy_packaging_cost: Number(v.packaging_cost || 0),
+          legacy_platform_fee_percent: Number(v.platform_fee_percent || 0),
+          components: (componentsByProduct.get(v.product_id) || []).map((c: any) => ({ ...c, type: c.type as any, category: c.category as any, calculation_base: c.calculation_base as any })),
+        };
+      });
+
+      const costResult = computeOrderCosts(engineItems, { shipping_cost_owner: 0, discount_amount: 0 });
+      const snapshotByVariant = new Map(costResult.items.map(i => [i.variant_id, i]));
 
       const insertedItems = await trx(this.itemsTable)
-        .insert(itemsToInsert)
+        .insert(items.map(item => applySnapshot({ ...item, order_id: order.id }, snapshotByVariant.get(item.variant_id)!)))
         .returning('*');
 
       for (const item of items) {
@@ -189,7 +249,10 @@ export class OrderRepository {
 
       return {
         ...order,
-        items: insertedItems
+        total_cost: costResult.total_cost,
+        total_profit: costResult.total_profit,
+        margin_percent: costResult.margin_percent,
+        items: insertedItems,
       };
     });
   }
@@ -265,9 +328,43 @@ export class OrderRepository {
       const nuvemshopVariantIds = nuvemshopItems.map(item => item.variant_id);
       const internalVariants = await trx('product_variants')
         .whereIn('nuvemshop_variant_id', nuvemshopVariantIds)
-        .select('id', 'nuvemshop_variant_id', 'cost_price', 'packaging_cost', 'platform_fee_percent');
+        .select('id', 'nuvemshop_variant_id', 'product_id', 'cost_price', 'packaging_cost', 'platform_fee_percent');
 
       const variantMap = new Map(internalVariants.map(v => [v.nuvemshop_variant_id, v]));
+
+      const productIds = [...new Set(internalVariants.map(v => v.product_id))];
+      const componentsByProduct = new Map<string, Array<{ id: string; name: string; type: string; category: string; value: number; calculation_base: string; quantity: number }>>();
+      for (const row of await costRepository.getComponentsByProductIds(productIds)) {
+        if (!componentsByProduct.has(row.product_id)) componentsByProduct.set(row.product_id, []);
+        componentsByProduct.get(row.product_id)!.push({
+          id: row.id, name: row.name, type: row.type, category: row.category,
+          value: Number(row.value), calculation_base: row.calculation_base, quantity: row.quantity,
+        });
+      }
+
+      const engineItems: CostEngineItemInput[] = [];
+      for (const nuvemshopItem of nuvemshopItems) {
+        const internalVariant = variantMap.get(nuvemshopItem.variant_id);
+        if (!internalVariant) continue;
+        engineItems.push({
+          variant_id: internalVariant.id,
+          product_id: internalVariant.product_id,
+          unit_price: nuvemshopItem.price,
+          quantity: nuvemshopItem.quantity,
+          product_cost: Number(internalVariant.cost_price || 0),
+          legacy_packaging_cost: Number(internalVariant.packaging_cost || 0),
+          legacy_platform_fee_percent: Number(internalVariant.platform_fee_percent || 0),
+          components: (componentsByProduct.get(internalVariant.product_id) || []).map(c => ({
+            ...c, type: c.type as any, category: c.category as any, calculation_base: c.calculation_base as any,
+          })),
+        });
+      }
+
+      const costResult = computeOrderCosts(engineItems, {
+        shipping_cost_owner: data.shipping_cost_owner ? parseFloat(data.shipping_cost_owner) : 0,
+        discount_amount: data.discount ? parseFloat(data.discount) : 0,
+      });
+      const snapshotByVariant = new Map(costResult.items.map(i => [i.variant_id, i]));
 
       // Deactivate existing items to handle updates/removals
       await trx(this.itemsTable)
@@ -282,23 +379,30 @@ export class OrderRepository {
           continue;
         }
 
+        const snapshot = snapshotByVariant.get(internalVariant.id)!;
         const [item] = await trx(this.itemsTable)
-          .insert({
+          .insert(applySnapshot({
             order_id: order.id,
             variant_id: internalVariant.id,
             quantity: nuvemshopItem.quantity,
             unit_price: nuvemshopItem.price,
-            unit_cost: internalVariant.cost_price,
-            unit_packaging_cost: internalVariant.packaging_cost,
-            unit_platform_fee: (nuvemshopItem.price * (internalVariant.platform_fee_percent || 0)) / 100,
             has_promotional_price: nuvemshopItem.has_promotional_price ?? null,
-            status: true, // Mark as active
-          })
+            status: true,
+          }, snapshot))
           .returning('*');
         processedItems.push(item);
       }
 
-      return { ...order, items: processedItems };
+      await trx(this.ordersTable)
+        .where({ id: order.id })
+        .update({
+          total_cost: costResult.total_cost,
+          total_profit: costResult.total_profit,
+          margin_percent: costResult.margin_percent,
+          updated_at: new Date(),
+        });
+
+      return { ...order, total_cost: costResult.total_cost, total_profit: costResult.total_profit, margin_percent: costResult.margin_percent, items: processedItems };
     });
   }
 

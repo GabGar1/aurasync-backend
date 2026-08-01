@@ -2,6 +2,7 @@ import { describe, it, after, before } from "node:test";
 import assert from "node:assert";
 import { orderService } from "./order.service.js";
 import { productService } from "./product.service.js";
+import { costService } from "./cost.service.js";
 import { db } from "../lib/db.js";
 import {cleanupDatabase, closeDatabase} from "../test/setup";
 
@@ -388,6 +389,45 @@ describe("OrderService Integration Tests", () => {
         .where({ product_id: product.id })
         .del();
       await db("products").where({ id: product.id }).del();
+    });
+  });
+
+  describe("7. Cost Snapshot on Order Creation", () => {
+    let snapVariantId: string;
+
+    before(async () => {
+      const product = await productService.createProduct({
+        slug: "snapshot-cost-test",
+        name: "Snapshot Cost Test",
+        variants: [{ price: 100, stock_quantity: 50, cost_price: 40, packaging_cost: 2, platform_fee_percent: 3 }],
+      });
+      snapVariantId = product.variants[0]!.id;
+
+      const component = await costService.createComponent({
+        name: "Caixa Snapshot", type: "FIXED", value: 1.5, category: "PACKAGING",
+      });
+      await costService.associateComponent({
+        product_id: product.id, cost_component_id: component.id, quantity: 2,
+      });
+    });
+
+    it("persists the full cost snapshot on the order item", async () => {
+      const order = await orderService.createOrder({
+        customer_name: "Snapshot Customer",
+        items: [{ variant_id: snapVariantId, quantity: 1, unit_price: 100 }],
+      });
+
+      const item = order.items[0]!;
+      assert.strictEqual(Number(item.unit_cost), 40);
+      assert.strictEqual(Number(item.unit_packaging_cost), 3); // 1.5 * 2
+      assert.strictEqual(Number(item.unit_platform_fee), 0);   // components supersede legacy
+      assert.strictEqual(Number(item.unit_total_cost), 43);
+      assert.strictEqual(Number(item.unit_profit), 57);
+      assert.strictEqual(Number(item.margin_percent), 57);
+      assert.ok(Array.isArray(item.cost_breakdown));
+      assert.ok((item.cost_breakdown as any[]).length >= 2);
+      assert.strictEqual(Number(order.total_cost), 43);
+      assert.strictEqual(Number(order.total_profit), 57);
     });
   });
 });
