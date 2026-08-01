@@ -8,6 +8,7 @@ import {
 } from '../repositories/order.repository.js';
 import { OrderSchema, type OrderCreate, type OrderUpdate } from '../schemas/order.schema.js';
 import { websocketManager } from '../lib/websocket.js';
+import { customerService } from './customer.service.js';
 
 export class OrderService {
 
@@ -105,7 +106,24 @@ export class OrderService {
   }
 
   async upsertOrderFromNuvemshop(data: NuvemshopOrderData): Promise<OrderWithItems> {
-    return await orderRepository.upsertOrderFromNuvemshop(data);
+    const order = await orderRepository.upsertOrderFromNuvemshop(data);
+
+    await customerService.upsertFromOrder({
+      email: data.contact_email ?? null,
+      name: data.customer?.name ?? 'Cliente',
+      city: data.shipping_address?.city ?? null,
+      province: data.shipping_address?.province ?? null,
+      payment_method: data.payment_details?.method ?? null,
+      gateway: data.gateway ?? null,
+      storefront: data.storefront ?? null,
+      utm_source: data.customer_visit?.utm_parameters?.utm_source ?? null,
+      utm_medium: data.customer_visit?.utm_parameters?.utm_medium ?? null,
+      utm_campaign: data.customer_visit?.utm_parameters?.utm_campaign ?? null,
+      total: Number(order.total_amount),
+      date: order.created_at,
+    });
+
+    return order;
   }
 }
 

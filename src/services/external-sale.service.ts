@@ -4,6 +4,7 @@ import { costRepository } from '../repositories/cost.repository.js';
 import { computeOrderCosts, type CostEngineItemInput } from '../lib/cost-engine.js';
 import { db } from '../lib/db.js';
 import { websocketManager } from '../lib/websocket.js';
+import { customerService } from './customer.service.js';
 
 export class ExternalSaleService {
   async createExternalSale(data: ExternalSaleCreate) {
@@ -62,7 +63,20 @@ export class ExternalSaleService {
 
     const order = await externalSaleRepository.createExternalSale(input, costResult);
 
-    // TODO(Phase 4): upsert customer via customerService.upsertFromOrder once the Customer module exists
+    await customerService.upsertFromOrder({
+      name: validated.customer_name,
+      email: validated.customer_email ?? null,
+      city: null,
+      province: null,
+      payment_method: validated.payment_method ?? null,
+      gateway: validated.gateway ?? null,
+      storefront: 'EXTERNAL',
+      utm_source: null,
+      utm_medium: null,
+      utm_campaign: null,
+      total: Number(order.total_amount),
+      date: order.created_at,
+    });
 
     websocketManager.broadcast({
       event: 'orders_updated',
