@@ -298,10 +298,22 @@ export class ProductRepository {
     }
 
     if (filters.search) {
+      const term = `%${filters.search}%`;
       query = query.where((builder: Knex.QueryBuilder) => {
-        builder.where('name', 'ilike', `%${filters.search}%`)
-            .orWhere('slug', 'ilike', `%${filters.search}%`)
-            .orWhere('nuvemshop_id', 'ilike', `%${filters.search}%`);
+        builder.where('name', 'ilike', term)
+          .orWhere('slug', 'ilike', term)
+          .orWhere('nuvemshop_id', 'ilike', term)
+          .orWhereExists(function (this: any) {
+            this.select('id')
+              .from('product_variants')
+              .whereRaw('product_variants.product_id = products.id')
+              .whereNull('product_variants.deleted_at')
+              .where((b: any) => {
+                b.where('product_variants.sku', 'ilike', term)
+                  .orWhere('product_variants.name', 'ilike', term)
+                  .orWhere('product_variants.nuvemshop_variant_id', 'ilike', term);
+              });
+          });
       });
     }
 

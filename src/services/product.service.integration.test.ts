@@ -10,13 +10,30 @@ describe("ProductService Integration Tests", () => {
     "premium-gaming-mouse-test",
     "duplicate-slug-test",
     "update-target-slug-test",
-    "delete-target-slug-test"
+    "delete-target-slug-test",
+    "search-variant-product-test"
   ];
 
   let mainProductId: string;
 
   before(async () => {
     await cleanupDatabase();
+
+    await productService.createProduct({
+      slug: "search-variant-product-test",
+      name: "Search Variant Product",
+      category: "Peripherals",
+      is_active: true,
+      variants: [
+        {
+          sku: "MY-VARIANT-SKU",
+          name: "Variant With Searchable SKU",
+          price: 199.90,
+          stock_quantity: 10,
+          cost_price: 90.00
+        }
+      ]
+    });
   });
 
   after(async () => {
@@ -119,6 +136,14 @@ describe("ProductService Integration Tests", () => {
       assert.ok(result.products);
       assert.ok(Array.isArray(result.products));
       assert.ok(result.total >= 1);
+    });
+
+    it("should find a product by variant SKU", async () => {
+      const result = await productService.getProducts(1, 10, { search: "MY-VARIANT-SKU" });
+      assert.ok(result.products.length >= 1);
+      const found = result.products.find((p: any) => p.name === "Search Variant Product");
+      assert.ok(found);
+      assert.ok(found.variants.some((v: any) => v.sku === "MY-VARIANT-SKU"));
     });
   });
 
