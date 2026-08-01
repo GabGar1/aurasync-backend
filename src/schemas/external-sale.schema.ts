@@ -69,5 +69,5 @@ export const ExternalSaleSchema = {
   }),
 };
 
-export type ExternalSaleCreate = z.infer<typeof ExternalSaleSchema.create>;
+export type ExternalSaleCreate = z.input<typeof ExternalSaleSchema.create>;
 export type ExternalSaleResponse = z.infer<typeof ExternalSaleSchema.response>;
