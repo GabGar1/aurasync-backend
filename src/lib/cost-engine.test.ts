@@ -65,8 +65,10 @@ describe("CostEngine", () => {
     assert.strictEqual(v1.unit_shipping_cost, 5); // 20 * 25%
     assert.strictEqual(v2.unit_shipping_cost, 15);
     assert.strictEqual(v2.unit_platform_fee, 7.5); // 10 * 75%
-    // v1 = 50 (45 legacy base + 5 freight), v2 = 62.5 (40 base + 7.5 fee + 15 freight)
-    assert.strictEqual(result.total_cost, 112.5);
+    assert.strictEqual(v1.unit_platform_fee, 5.5); // 3 legacy + 10 * 25%
+    assert.strictEqual(v1.unit_total_cost, 52.5);
+    assert.strictEqual(v2.unit_total_cost, 62.5);
+    assert.strictEqual(result.total_cost, 115); // 40+2+3+10+20 for 2 items
   });
 
   it("allocates discount proportionally for item profit", () => {

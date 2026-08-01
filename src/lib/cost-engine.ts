@@ -59,21 +59,17 @@ export interface OrderCostResult {
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
 
-const categoryKey: Record<CostComponentCategory, keyof ItemCostSnapshot> = {
-  PACKAGING: "unit_packaging_cost",
-  TAX: "unit_tax",
-  FEE: "unit_platform_fee",
-  SHIPPING: "unit_shipping_cost",
-  OPERATIONAL: "unit_operational_cost",
-  MARKETING: "unit_marketing_cost",
-  OTHER: "unit_other_cost",
-};
+interface PerOrderFee {
+  value: number;
+  category: CostComponentCategory;
+  name: string;
+}
 
 interface ItemBaseCost {
   input: CostEngineItemInput;
-  perUnit: Record<keyof typeof categoryKey, number>;
+  perUnit: Record<CostComponentCategory, number>;
   breakdown: CostBreakdownEntry[];
-  perOrderFees: Array<{ value: number; category: CostComponentCategory }>;
+  perOrderFees: PerOrderFee[];
 }
 
 function computeItemBase(input: CostEngineItemInput): ItemBaseCost {
@@ -81,7 +77,7 @@ function computeItemBase(input: CostEngineItemInput): ItemBaseCost {
     PACKAGING: 0, TAX: 0, FEE: 0, SHIPPING: 0, OPERATIONAL: 0, MARKETING: 0, OTHER: 0,
   };
   const breakdown: CostBreakdownEntry[] = [];
-  const perOrderFees: ItemBaseCost["perOrderFees"] = [];
+  const perOrderFees: PerOrderFee[] = [];
 
   breakdown.push({
     component_id: null,
@@ -109,8 +105,7 @@ function computeItemBase(input: CostEngineItemInput): ItemBaseCost {
     if (c.type === "MONTHLY") continue;
 
     if (c.type === "PER_ORDER") {
-      perOrderFees.push({ value: c.value, category: c.category });
-      breakdown.push({ component_id: c.id, name: c.name, type: c.type, category: c.category, unit_value: c.value, quantity: 1, line_total: c.value });
+      perOrderFees.push({ value: c.value, category: c.category, name: c.name });
       continue;
     }
 
@@ -138,37 +133,32 @@ export function computeOrderCosts(
 ): OrderCostResult {
   const baseCosts = items.map(computeItemBase);
   const totalWeight = items.reduce((sum, i) => sum + i.unit_price * i.quantity, 0);
-
-  const totalPerOrderFees = baseCosts.reduce((sum, b) =>
-    sum + b.perOrderFees.reduce((s, f) => s + f.value, 0), 0);
   const freight = orderLevel.shipping_cost_owner || 0;
-  const orderLevelTotal = freight + totalPerOrderFees;
+  const allPerOrderFees: PerOrderFee[] = baseCosts.reduce(
+    (acc, b) => acc.concat(b.perOrderFees), [] as PerOrderFee[]
+  );
 
   const snapshots: ItemCostSnapshot[] = baseCosts.map((b) => {
     const { input } = b;
     const weight = input.unit_price * input.quantity;
     const share = totalWeight > 0 ? weight / totalWeight : 0;
 
-    const perUnit: Record<CostComponentCategory, number> = {
-      PACKAGING: b.perUnit.PACKAGING, TAX: b.perUnit.TAX, FEE: b.perUnit.FEE,
-      SHIPPING: b.perUnit.SHIPPING, OPERATIONAL: b.perUnit.OPERATIONAL,
-      MARKETING: b.perUnit.MARKETING, OTHER: b.perUnit.OTHER,
-    };
+    const perUnit: Record<CostComponentCategory, number> = { ...b.perUnit };
 
-    // allocate order-level costs (freight + per-order fees) by share
     if (share > 0) {
       perUnit.SHIPPING += round2(freight * share);
-      for (const f of b.perOrderFees) {
-        perUnit[f.category] += round2(f.value * share);
-      }
+    }
+    for (const f of allPerOrderFees) {
+      perUnit[f.category] += round2(f.value * share);
     }
 
     const allocationBreakdown: CostBreakdownEntry[] = [];
     if (share > 0 && freight > 0) {
       allocationBreakdown.push({ component_id: null, name: "Frete (rateado)", type: "ALLOCATION", category: "SHIPPING", unit_value: round2(freight * share), quantity: 1, line_total: round2(freight * share) });
     }
-    for (const f of b.perOrderFees) {
-      allocationBreakdown.push({ component_id: null, name: f.value > 0 ? "Taxa por pedido (rateado)" : "", type: "ALLOCATION", category: f.category, unit_value: round2(f.value * share), quantity: 1, line_total: round2(f.value * share) });
+    for (const f of allPerOrderFees) {
+      const allocated = round2(f.value * share);
+      allocationBreakdown.push({ component_id: null, name: `${f.name} (rateado)`, type: "ALLOCATION", category: f.category, unit_value: allocated, quantity: 1, line_total: allocated });
     }
 
     const unit_total_cost = round2(
@@ -178,7 +168,7 @@ export function computeOrderCosts(
 
     const grossRevenue = input.unit_price * input.quantity;
     const discountShare = totalWeight > 0 ? (orderLevel.discount_amount || 0) * share : 0;
-    const netUnitRevenue = (grossRevenue - discountShare) / input.quantity;
+    const netUnitRevenue = input.quantity > 0 ? (grossRevenue - discountShare) / input.quantity : 0;
     const unit_profit = round2(netUnitRevenue - unit_total_cost);
     const margin_percent = netUnitRevenue > 0 ? round2((unit_profit / netUnitRevenue) * 100) : 0;
 
