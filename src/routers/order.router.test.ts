@@ -116,13 +116,13 @@ describe("Order Router Auth", () => {
       assert.strictEqual(res.statusCode, 401);
     });
 
-    it("should return 200 for EMPLOYEE role", async () => {
+    it("should return 403 for EMPLOYEE role", async () => {
       const res = await app.inject({
         method: "GET",
         url: "/api/orders",
         headers: { authorization: `Bearer ${employeeToken}` },
       });
-      assert.strictEqual(res.statusCode, 200);
+      assert.strictEqual(res.statusCode, 403);
     });
 
     it("should return 200 for ADMIN role", async () => {
@@ -141,13 +141,13 @@ describe("Order Router Auth", () => {
       assert.strictEqual(res.statusCode, 401);
     });
 
-    it("should return 200 for EMPLOYEE role", async () => {
+    it("should return 403 for EMPLOYEE role", async () => {
       const res = await app.inject({
         method: "GET",
         url: `/api/orders/${testOrderId}`,
         headers: { authorization: `Bearer ${employeeToken}` },
       });
-      assert.strictEqual(res.statusCode, 200);
+      assert.strictEqual(res.statusCode, 403);
     });
 
     it("should return 200 for ADMIN role", async () => {

@@ -218,14 +218,14 @@ describe("User Router Auth", () => {
       assert.strictEqual(res.statusCode, 401);
     });
 
-    it("should return 200 for EMPLOYEE role", async () => {
+    it("should return 403 for EMPLOYEE role", async () => {
       const res = await app.inject({
         method: "GET",
         url: "/api/users/check-email",
         headers: { authorization: `Bearer ${employeeToken}` },
         query: { email: "test@example.com" },
       });
-      assert.strictEqual(res.statusCode, 200);
+      assert.strictEqual(res.statusCode, 403);
     });
 
     it("should return 200 for ADMIN role", async () => {
