@@ -11,6 +11,7 @@ import {inventoryRoutes} from "./routers/inventory.router";
 import { webhookRoutes } from './routers/webhook.router.js';
 import { dashboardRoutes } from './routers/dashboard.router.js';
 import { authRoutes } from './routers/auth.router.js';
+import { costRoutes } from './routers/cost.router.js';
 import {fastifySwagger} from "@fastify/swagger";
 import {fastifySwaggerUi} from "@fastify/swagger-ui";
 import {fastifyCors} from "@fastify/cors";
@@ -94,6 +95,7 @@ app.register(inventoryRoutes, { prefix: '/api/inventory' });
 app.register(webhookRoutes, { prefix: '/api/webhooks' });
 app.register(dashboardRoutes, { prefix: '/api' });
 app.register(authRoutes, { prefix: '/api/auth' });
+app.register(costRoutes, { prefix: '/api/cost-components' });
 
 const start = async () => {
   try {
