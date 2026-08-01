@@ -3,7 +3,7 @@ import assert from "node:assert";
 import { orderService } from "./order.service.js";
 import { productService } from "./product.service.js";
 import { db } from "../lib/db.js";
-import {cleanupDatabase} from "../test/setup";
+import {cleanupDatabase, closeDatabase} from "../test/setup";
 
 describe("OrderService Integration Tests", () => {
   const testCustomerNames = [
@@ -36,7 +36,7 @@ describe("OrderService Integration Tests", () => {
   // --- CLEANUP ---
   after(async () => {
     await cleanupDatabase();
-
+    await closeDatabase();
   });
 
   // --- CREATE ---

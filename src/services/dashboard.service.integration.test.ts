@@ -2,7 +2,7 @@ import { describe, it, after, before } from "node:test";
 import assert from "node:assert";
 import { dashboardService } from "./dashboard.service.js";
 import { db } from "../lib/db.js";
-import { cleanupDatabase } from "../test/setup.js";
+import { cleanupDatabase, closeDatabase } from "../test/setup.js";
 
 describe("DashboardService Integration Tests", () => {
   const productId = "00000000-0000-0000-0000-000000000001";
@@ -61,6 +61,7 @@ describe("DashboardService Integration Tests", () => {
 
   after(async () => {
     await cleanupDatabase();
+    await closeDatabase();
   });
 
   it("should return stock stats", async () => {

@@ -2,6 +2,7 @@ import {describe, it, after, before} from "node:test";
 import assert from "node:assert";
 import { userService } from "./user.service.js";
 import { db } from "../lib/db.js";
+import { closeDatabase } from "../test/setup.js";
 
 describe("UserService Integration Tests", () => {
   const testEmails = [
@@ -20,6 +21,7 @@ describe("UserService Integration Tests", () => {
 
   after(async () => {
     await db("users").whereIn("email", testEmails).del();
+    await closeDatabase();
   });
 
   // --- CREATE ---

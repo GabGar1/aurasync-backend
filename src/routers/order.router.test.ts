@@ -7,7 +7,7 @@ import fastifyCookie from "@fastify/cookie";
 import type { FastifyRequest, FastifyReply } from "fastify";
 import { orderRoutes } from "./order.router.js";
 import { productService } from "../services/product.service.js";
-import { cleanupDatabase } from "../test/setup.js";
+import { cleanupDatabase, closeDatabase } from "../test/setup.js";
 
 declare module "@fastify/jwt" {
   interface FastifyJWT {
@@ -67,6 +67,7 @@ describe("Order Router Auth", () => {
   after(async () => {
     await app.close();
     await cleanupDatabase();
+    await closeDatabase();
   });
 
   describe("POST / — create order", () => {

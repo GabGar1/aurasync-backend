@@ -6,6 +6,7 @@ import { serializerCompiler, validatorCompiler } from "fastify-type-provider-zod
 import fastifyCookie from "@fastify/cookie";
 import type { FastifyRequest, FastifyReply } from "fastify";
 import { userRoutes } from "./user.router.js";
+import { closeDatabase } from "../test/setup.js";
 import { db } from "../lib/db.js";
 
 const testEmails = [
@@ -64,7 +65,7 @@ describe("User Router Auth", () => {
 
   after(async () => {
     await app.close();
-    await db("users").whereIn("email", testEmails).del();
+    await closeDatabase();
   });
 
   describe("POST /users — register", () => {
