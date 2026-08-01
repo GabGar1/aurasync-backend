@@ -1,6 +1,5 @@
 import {
   orderRepository,
-  type OrderWithItems,
   type CreateOrderInput,
   type UpdateOrderInput,
   type CreateOrderItemInput,
@@ -9,10 +8,13 @@ import {
 import { OrderSchema, type OrderCreate, type OrderUpdate } from '../schemas/order.schema.js';
 import { websocketManager } from '../lib/websocket.js';
 import { customerService } from './customer.service.js';
+import { enrichOrder } from '../lib/order-status.js';
+
+type EnrichedOrder = ReturnType<typeof enrichOrder>;
 
 export class OrderService {
 
-  async createOrder(orderData: OrderCreate): Promise<OrderWithItems> {
+  async createOrder(orderData: OrderCreate): Promise<EnrichedOrder> {
     const validatedData = OrderSchema.create.parse(orderData);
 
     let calculatedTotal = 0;
@@ -42,18 +44,20 @@ export class OrderService {
     if (validatedData.customer_name !== undefined) createInput.customer_name = validatedData.customer_name;
     if (validatedData.status !== undefined) createInput.status = validatedData.status;
 
-    return await orderRepository.create(createInput);
+    const order = await orderRepository.create(createInput);
+    return enrichOrder(order);
   }
 
-  async getOrderById(id: string): Promise<OrderWithItems | null> {
-    return await orderRepository.findById(id);
+  async getOrderById(id: string): Promise<EnrichedOrder | null> {
+    const order = await orderRepository.findById(id);
+    return order ? enrichOrder(order) : null;
   }
 
   async findByNuvemshopOrderId(nuvemshopOrderId: string) {
     return await orderRepository.findByNuvemshopOrderId(nuvemshopOrderId);
   }
 
-  async updateOrder(id: string, orderData: OrderUpdate): Promise<OrderWithItems | null> {
+  async updateOrder(id: string, orderData: OrderUpdate): Promise<EnrichedOrder | null> {
     const validatedData = OrderSchema.update.parse(orderData);
 
     const existingOrder = await orderRepository.findById(id);
@@ -66,7 +70,8 @@ export class OrderService {
     if (validatedData.customer_name !== undefined) updateData.customer_name = validatedData.customer_name;
     if (validatedData.status !== undefined) updateData.status = validatedData.status;
 
-    return await orderRepository.update(id, updateData);
+    const updated = await orderRepository.update(id, updateData);
+    return updated ? enrichOrder(updated) : null;
   }
 
   async deleteOrder(id: string): Promise<boolean> {
@@ -86,11 +91,12 @@ export class OrderService {
     page: number = 1,
     limit: number = 10,
     filters: { status?: string; search?: string } = {}
-  ): Promise<{ orders: OrderWithItems[]; total: number; page: number; limit: number }> {
-    return await orderRepository.findAll(page, limit, filters);
+  ): Promise<{ orders: EnrichedOrder[]; total: number; page: number; limit: number }> {
+    const result = await orderRepository.findAll(page, limit, filters);
+    return { ...result, orders: result.orders.map(enrichOrder) };
   }
 
-  async handleNuvemshopWebhook(data: NuvemshopOrderData): Promise<OrderWithItems> {
+  async handleNuvemshopWebhook(data: NuvemshopOrderData): Promise<EnrichedOrder> {
     console.log(`Processing webhook for Nuvemshop order ID: ${data.id}`);
 
     const updatedOrder = await this.upsertOrderFromNuvemshop(data);
@@ -105,7 +111,7 @@ export class OrderService {
     return updatedOrder;
   }
 
-  async upsertOrderFromNuvemshop(data: NuvemshopOrderData): Promise<OrderWithItems> {
+  async upsertOrderFromNuvemshop(data: NuvemshopOrderData): Promise<EnrichedOrder> {
     const order = await orderRepository.upsertOrderFromNuvemshop(data);
 
     await customerService.upsertFromOrder({
@@ -123,7 +129,7 @@ export class OrderService {
       date: order.created_at,
     });
 
-    return order;
+    return enrichOrder(order);
   }
 }
 

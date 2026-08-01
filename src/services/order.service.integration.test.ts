@@ -434,4 +434,18 @@ describe("OrderService Integration Tests", () => {
       assert.strictEqual(Number(row.total_profit), 57);
     });
   });
+
+  describe("8. Order Enrichment", () => {
+    it("returns translated status and financial indicators", async () => {
+      const order = await orderService.createOrder({
+        customer_name: "Enrichment Customer",
+        items: [{ variant_id: testVariantId1, quantity: 1, unit_price: 50 }],
+      });
+      assert.strictEqual(order.status_label, "Pendente");
+      assert.strictEqual(order.commercial_status, "Em aberto");
+      assert.strictEqual(typeof order.total_cost, "number");
+      assert.strictEqual(typeof order.margin_percent, "number");
+      assert.ok(order.items[0]!.unit_total_cost >= 0);
+    });
+  });
 });
