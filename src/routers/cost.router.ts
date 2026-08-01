@@ -38,34 +38,6 @@ export const costRoutes: FastifyPluginAsyncZod = async (fastify) => {
     }
   });
 
-  fastify.put('/:id', {
-    onRequest: [fastify.authenticate],
-    preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])],
-    schema: { params: z.object({ id: z.string().uuid() }), body: CostSchema.update },
-  }, async (request, reply) => {
-    try {
-      const component = await costService.updateComponent(request.params.id, request.body);
-      if (!component) return reply.code(404).send({ error: 'Cost component not found' });
-      return reply.send(component);
-    } catch (error: any) {
-      return reply.code(400).send({ error: error.message });
-    }
-  });
-
-  fastify.delete('/:id', {
-    onRequest: [fastify.authenticate],
-    preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])],
-    schema: { params: z.object({ id: z.string().uuid() }) },
-  }, async (request, reply) => {
-    try {
-      const deleted = await costService.deleteComponent(request.params.id);
-      if (!deleted) return reply.code(404).send({ error: 'Cost component not found' });
-      return reply.code(204).send();
-    } catch (error: any) {
-      return reply.code(400).send({ error: error.message });
-    }
-  });
-
   fastify.post('/associate', {
     onRequest: [fastify.authenticate],
     preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])],
@@ -114,6 +86,34 @@ export const costRoutes: FastifyPluginAsyncZod = async (fastify) => {
     try {
       const result = await costService.simulateCosts(request.body);
       return reply.send(result);
+    } catch (error: any) {
+      return reply.code(400).send({ error: error.message });
+    }
+  });
+
+  fastify.put('/:id', {
+    onRequest: [fastify.authenticate],
+    preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])],
+    schema: { params: z.object({ id: z.string().uuid() }), body: CostSchema.update },
+  }, async (request, reply) => {
+    try {
+      const component = await costService.updateComponent(request.params.id, request.body);
+      if (!component) return reply.code(404).send({ error: 'Cost component not found' });
+      return reply.send(component);
+    } catch (error: any) {
+      return reply.code(400).send({ error: error.message });
+    }
+  });
+
+  fastify.delete('/:id', {
+    onRequest: [fastify.authenticate],
+    preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])],
+    schema: { params: z.object({ id: z.string().uuid() }) },
+  }, async (request, reply) => {
+    try {
+      const deleted = await costService.deleteComponent(request.params.id);
+      if (!deleted) return reply.code(404).send({ error: 'Cost component not found' });
+      return reply.code(204).send();
     } catch (error: any) {
       return reply.code(400).send({ error: error.message });
     }
