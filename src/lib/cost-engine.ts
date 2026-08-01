@@ -146,18 +146,19 @@ export function computeOrderCosts(
     const perUnit: Record<CostComponentCategory, number> = { ...b.perUnit };
 
     if (share > 0) {
-      perUnit.SHIPPING += round2(freight * share);
+      perUnit.SHIPPING += round2((freight * share) / input.quantity);
     }
     for (const f of allPerOrderFees) {
-      perUnit[f.category] += round2(f.value * share);
+      perUnit[f.category] += round2((f.value * share) / input.quantity);
     }
 
     const allocationBreakdown: CostBreakdownEntry[] = [];
     if (share > 0 && freight > 0) {
-      allocationBreakdown.push({ component_id: null, name: "Frete (rateado)", type: "ALLOCATION", category: "SHIPPING", unit_value: round2(freight * share), quantity: 1, line_total: round2(freight * share) });
+      const freightAllocation = round2((freight * share) / input.quantity);
+      allocationBreakdown.push({ component_id: null, name: "Frete (rateado)", type: "ALLOCATION", category: "SHIPPING", unit_value: freightAllocation, quantity: 1, line_total: freightAllocation });
     }
     for (const f of allPerOrderFees) {
-      const allocated = round2(f.value * share);
+      const allocated = round2((f.value * share) / input.quantity);
       allocationBreakdown.push({ component_id: null, name: `${f.name} (rateado)`, type: "ALLOCATION", category: f.category, unit_value: allocated, quantity: 1, line_total: allocated });
     }
 

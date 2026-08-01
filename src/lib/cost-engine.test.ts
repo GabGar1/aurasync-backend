@@ -71,6 +71,13 @@ describe("CostEngine", () => {
     assert.strictEqual(result.total_cost, 115); // 40+2+3+10+20 for 2 items
   });
 
+  it("divides allocated freight by line quantity for per-unit cost", () => {
+    const item = baseItem({ unit_price: 80, quantity: 2 });
+    const result = computeOrderCosts([item], { shipping_cost_owner: 10, discount_amount: 0 });
+    assert.strictEqual(result.items[0]!.unit_shipping_cost, 5); // 10 * 100% share / 2 qty
+    assert.strictEqual(result.total_cost, 98.8); // (40 + 2 + 2.4 + 5) * 2
+  });
+
   it("allocates discount proportionally for item profit", () => {
     const items = [
       baseItem({ variant_id: "v1", unit_price: 100, quantity: 1, components: [] }),
