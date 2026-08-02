@@ -165,6 +165,7 @@ class NuvemshopService {
           payment_status: nuvemOrder.payment_status,
           fulfillments: nuvemOrder.fulfillments,
           free_shipping_config: nuvemOrder.free_shipping_config,
+          created_at: nuvemOrder.created_at,
           paid_at: nuvemOrder.paid_at,
           shipped_at: nuvemOrder.shipped_at,
           completed_at: nuvemOrder.completed_at,

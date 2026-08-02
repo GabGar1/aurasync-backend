@@ -128,6 +128,7 @@ export interface NuvemshopOrderData {
   payment_status?: string;
   fulfillments?: Array<{ status: string }>;
   free_shipping_config?: { cart_has_free_shipping?: boolean };
+  created_at?: string | null;
   paid_at?: string | null;
   shipped_at?: string | null;
   completed_at?: { date: string; timezone_type: number; timezone: string } | null;
@@ -326,6 +327,7 @@ export class OrderRepository {
             nuvemshop_order_id,
             ...orderUpsertData,
             updated_at: undefined,
+            created_at: data.created_at ? new Date(data.created_at) : undefined,
           })
           .returning('*');
       }

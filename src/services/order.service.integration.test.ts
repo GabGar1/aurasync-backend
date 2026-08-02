@@ -267,6 +267,7 @@ describe("OrderService Integration Tests", () => {
         payment_status: "paid",
         fulfillments: [{ status: "shipped" }],
         free_shipping_config: { cart_has_free_shipping: true },
+        created_at: "2026-05-12T14:30:00+0000",
         paid_at: "2026-05-13T17:49:03+0000",
         shipped_at: null,
         completed_at: {
@@ -312,6 +313,8 @@ describe("OrderService Integration Tests", () => {
       assert.strictEqual(Number(order.discount_amount), 49.40);
       assert.strictEqual(Number(order.shipping_cost_customer), 25.36);
       assert.strictEqual(Number(order.shipping_cost_owner), 25.36);
+      assert.ok(order.created_at instanceof Date);
+      assert.strictEqual(order.created_at.toISOString().slice(0, 10), "2026-05-12");
       assert.ok(order.paid_at instanceof Date);
       assert.strictEqual(order.shipped_at, null);
       assert.ok(order.completed_at instanceof Date);
@@ -385,6 +388,56 @@ describe("OrderService Integration Tests", () => {
 
       // Cleanup
       await db("orders").where({ id: order.id }).del();
+      await db("product_variants")
+        .where({ product_id: product.id })
+        .del();
+      await db("products").where({ id: product.id }).del();
+    });
+
+    it("keeps created_at frozen when the same order is re-synced", async () => {
+      const product = await productService.createProduct({
+        slug: "immutable-date-test",
+        name: "Immutable Date Product",
+        variants: [
+          {
+            sku: "IMMUT-001",
+            price: 30.00,
+            stock_quantity: 50,
+            nuvemshop_variant_id: "444555666",
+          },
+        ],
+      });
+      const nuvemshopVariantId = product.variants[0]!.nuvemshop_variant_id!;
+
+      const base = {
+        id: "immutable-date-1",
+        customer: { name: "Immutable Customer" },
+        status: "PAID",
+        total: 60.0,
+        items: [{ variant_id: nuvemshopVariantId, quantity: 2, price: 30.00 }],
+        contact_email: "immutable@test.com",
+      };
+
+      const first = await orderService.upsertOrderFromNuvemshop({
+        ...base,
+        created_at: "2026-05-01T10:00:00+0000",
+      } as any);
+      assert.ok(first.created_at instanceof Date);
+      assert.strictEqual(first.created_at.toISOString().slice(0, 10), "2026-05-01");
+
+      const second = await orderService.upsertOrderFromNuvemshop({
+        ...base,
+        created_at: "2026-05-20T10:00:00+0000",
+      } as any);
+      assert.ok(second.created_at instanceof Date);
+      assert.strictEqual(
+        second.created_at.toISOString().slice(0, 10),
+        "2026-05-01",
+        "created_at must not change on re-sync"
+      );
+
+      // Cleanup
+      await db("orders").where({ id: first.id }).del();
       await db("product_variants")
         .where({ product_id: product.id })
         .del();
