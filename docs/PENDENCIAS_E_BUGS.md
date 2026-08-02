@@ -87,7 +87,7 @@ O maior achado. Três causas:
 
 ## 4. Quirks conhecidos do repo (AGENTS.md — não resolvidos, cuidado)
 
-- **⚠️ `npm test` APAGA os dados do banco de dev** — `cleanupDatabase()` (em `src/test/setup.ts`) trunca `orders`, `order_items`, `products`, `product_variants`, `customers`, tabelas de custo etc. Os testes de integração compartilham o MESMO banco (`DATABASE_URL`) e **não existe banco de teste isolado**. Rodar qualquer teste de integração destrói o catálogo/pedidos sincronizados. **Recomendação forte:** criar banco de teste dedicado (ex.: `aurasync_test`) e apontar `DATABASE_URL` para ele em ambiente de teste (ex.: `.env.test` + script `npm test` com `NODE_ENV=test`).
+- **⚠️ `npm test` APAGAVA os dados do banco de dev — RESOLVIDO (commit em 2026-08-02)** — `cleanupDatabase()` (em `src/test/setup.ts`) trunca `orders`, `order_items`, `products`, `product_variants`, `customers`, tabelas de custo etc. Antes, os testes de integração compartilhavam o MESMO banco (`DATABASE_URL`). **Agora os testes rodam em banco isolado `aurasync_test`** (`NODE_ENV=test` + `DATABASE_URL_TEST`): o `pretest` (`src/test/bootstrap.ts`) cria o banco e aplica as migrações automaticamente; o banco de dev nunca é tocado.
 - **Preços inconsistentes**: `product.schema.ts` usa `z.int()` (centavos), `order.schema.ts` usa `z.number()` (decimal). Em campos novos, usar `z.number()` (decimal).
 - **`user.schema.ts:49`**: `listResponse.id` tipado `z.number()` mas o DB usa UUID. Bug conhecido — usar `z.string().uuid()`.
 - **Dead deps**: `express`, `@types/express`, `cors` no `package.json` (não usar; Fastify é o framework).

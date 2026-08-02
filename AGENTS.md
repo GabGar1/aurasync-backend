@@ -19,13 +19,14 @@ docker compose up -d                    # Postgres 15 on :5433
 cp .env.example .env || true            # env already exists
 npm run db:migrate                      # run migrations
 npm run dev                             # tsx watch on :3333
-npm test                                # node --test --test-concurrency=1 src/**/*.test.ts
+npm test                                # runs on dedicated test DB (aurasync_test), never touches dev data
 npm run db:make -- <name>               # new migration
 npm run db:rollback                     # rollback last batch
 npm run db:seed                         # create/reset default SUPER_ADMIN user
 ```
 
 DB: `postgresql://admin:admin@127.0.0.1:5433/aurasync` (from `DATABASE_URL` env).
+Test DB: `postgresql://admin:admin@127.0.0.1:5433/aurasync_test` (from `DATABASE_URL_TEST` env, created + migrated automatically by `npm test`).
 
 ## Architecture (strict)
 
@@ -53,6 +54,7 @@ Router never calls Repository. Service never builds raw Knex queries.
 
 - Every feature/bugfix starts with a failing test.
 - Tests are **real integration tests** — no mocking Knex. Follow `*.service.integration.test.ts` pattern with `cleanupDatabase()` in `before`/`after` (`src/test/setup.ts`).
+- Tests run against a **dedicated test database** (`aurasync_test`, via `NODE_ENV=test` + `DATABASE_URL_TEST`) — the dev database is NEVER touched by `npm test`. `npm run pretest` auto-creates the test DB and applies migrations.
 - `cleanupDatabase()` truncates all tables **except `users`** — seed/admin users survive test runs.
 - Tests that create users must clean up only their own data in `after` (by known email/ID), never call `db("users").del()` or truncate the whole table.
 - Run: `npm test` (runs serially via `--test-concurrency=1`).

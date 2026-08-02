@@ -5,7 +5,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "node --import tsx --test --test-concurrency=1 src/**/*.test.ts",
+    "test": "NODE_ENV=test node --import tsx --test --test-concurrency=1 src/**/*.test.ts",
+    "pretest": "NODE_ENV=test node --import tsx src/test/bootstrap.ts",
     "dev": "tsx watch src/server.ts",
     "start": "tsx src/server.ts",
     "db:make": "node --import tsx ./node_modules/knex/bin/cli.js migrate:make -x ts",
