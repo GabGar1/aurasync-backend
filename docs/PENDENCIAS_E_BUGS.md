@@ -87,6 +87,7 @@ O maior achado. Três causas:
 
 ## 4. Quirks conhecidos do repo (AGENTS.md — não resolvidos, cuidado)
 
+- **⚠️ `npm test` APAGA os dados do banco de dev** — `cleanupDatabase()` (em `src/test/setup.ts`) trunca `orders`, `order_items`, `products`, `product_variants`, `customers`, tabelas de custo etc. Os testes de integração compartilham o MESMO banco (`DATABASE_URL`) e **não existe banco de teste isolado**. Rodar qualquer teste de integração destrói o catálogo/pedidos sincronizados. **Recomendação forte:** criar banco de teste dedicado (ex.: `aurasync_test`) e apontar `DATABASE_URL` para ele em ambiente de teste (ex.: `.env.test` + script `npm test` com `NODE_ENV=test`).
 - **Preços inconsistentes**: `product.schema.ts` usa `z.int()` (centavos), `order.schema.ts` usa `z.number()` (decimal). Em campos novos, usar `z.number()` (decimal).
 - **`user.schema.ts:49`**: `listResponse.id` tipado `z.number()` mas o DB usa UUID. Bug conhecido — usar `z.string().uuid()`.
 - **Dead deps**: `express`, `@types/express`, `cors` no `package.json` (não usar; Fastify é o framework).
@@ -98,6 +99,8 @@ O maior achado. Três causas:
 
 ## 5. Decisões que precisam de validação de produto (ficaram em aberto)
 
+- **Datas dos pedidos corrigidas (2026-08-02, commit `2820e42`)**: `orders.created_at` agora vem do `created_at` da Nuvemshop (data real da venda) no primeiro insert; imutável em re-sync. Pedidos recém-sincronizados já nascem corretos. Atenção: pedidos antigos sincronizados ANTES desse fix continuam com a data do sync (não há backfill — foi desnecessário porque os testes apagaram os dados e o re-sync repovoou tudo com as datas corretas).
+- **38 pedidos sem itens** (variantes não encontradas no sync de produtos — produtos excluídos/fora do catálogo): investigar cobertura do sync de produtos.
 - **Ordem dos testes de router**: alguns arquivos dependem de estado de testes anteriores (ex.: cost service, customer service). Seguro com `--test-concurrency=1`, frágil a reordenação.
 - **Favoritar/expor rota `GET /dashboard/stock` com `start_date`/`end_date`**: o endpoint aceita mas ignora os params (removidos do schema na revisão final — se quiser o filtro de data no estoque, implementar de verdade).
 - **Recorrência de cliente** hoje é binária (`>1 pedido`); evoluir para níveis (2x, 3x...) quando o CRM chegar.
