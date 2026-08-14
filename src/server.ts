@@ -16,6 +16,7 @@ import { externalSaleRoutes } from './routers/external-sale.router.js';
 import { customerRoutes } from './routers/customer.router.js';
 import { productSubgroupRoutes } from './routers/product-subgroup.router.js';
 import { creditFeeRoutes } from './routers/credit-fee.router.js';
+import { costClosingRoutes } from './routers/cost-closing.router.js';
 import {fastifySwagger} from "@fastify/swagger";
 import {fastifySwaggerUi} from "@fastify/swagger-ui";
 import {fastifyCors} from "@fastify/cors";
@@ -104,6 +105,7 @@ app.register(externalSaleRoutes, { prefix: '/api/external-sales' });
 app.register(customerRoutes, { prefix: '/api/customers' });
 app.register(productSubgroupRoutes, { prefix: '/api/product-subgroups' });
 app.register(creditFeeRoutes, { prefix: '/api/credit-fee-tiers' });
+app.register(costClosingRoutes, { prefix: '/api/cost-closing' });
 
 const start = async () => {
   try {
