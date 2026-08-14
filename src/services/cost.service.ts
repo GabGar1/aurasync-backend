@@ -69,32 +69,42 @@ export class CostService {
   async simulateCosts(input: CostSimulateInput) {
     const validated = CostSchema.simulate.parse(input);
     const variant = await db('product_variants')
-      .where({ id: validated.variant_id })
-      .whereNull('deleted_at')
+      .join('products', 'products.id', 'product_variants.product_id')
+      .where('product_variants.id', validated.variant_id)
+      .whereNull('product_variants.deleted_at')
+      .select('product_variants.id', 'product_variants.product_id', 'products.subgroup_id', 'product_variants.cost_price', 'product_variants.packaging_cost', 'product_variants.platform_fee_percent')
       .first();
     if (!variant) throw new Error('Product variant not found');
 
-    const components = await costRepository.getComponentsByProductIds([variant.product_id]);
-    const componentInputs = components.map(c => ({
+    const toComponent = (c: any) => ({
       id: c.id,
       name: c.name,
-      type: c.type as any,
-      category: c.category as any,
+      type: c.type,
+      category: c.category,
       value: Number(c.value),
-      calculation_base: c.calculation_base as any,
+      calculation_base: c.calculation_base,
       quantity: c.quantity,
-    }));
+      max_products_per_package: c.max_products_per_package,
+      consolidates: c.consolidates,
+      applies_to_fair_only: c.applies_to_fair_only,
+    });
+
+    const productComps = (await costRepository.getComponentsByProductIds([variant.product_id])).map(toComponent);
+    const subgroupComps = variant.subgroup_id
+      ? (await costRepository.getComponentsBySubgroupIds([variant.subgroup_id])).map(toComponent)
+      : [];
 
     const result = computeOrderCosts(
       [{
         variant_id: variant.id,
         product_id: variant.product_id,
+        subgroup_id: variant.subgroup_id ?? null,
         unit_price: validated.unit_price,
         quantity: validated.quantity,
         product_cost: Number(variant.cost_price || 0),
         legacy_packaging_cost: Number(variant.packaging_cost || 0),
         legacy_platform_fee_percent: Number(variant.platform_fee_percent || 0),
-        components: componentInputs,
+        components: [...productComps, ...subgroupComps],
       }],
       { shipping_cost_owner: 0, discount_amount: 0 }
     );

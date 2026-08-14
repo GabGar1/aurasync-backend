@@ -18,6 +18,7 @@ export const ExternalSaleSchema = {
     shipping_cost_owner: z.number().min(0).optional(),
     shipping_cost_customer: z.number().min(0).optional(),
     status: z.enum(["PENDING", "PAID", "SHIPPED", "DELIVERED", "CANCELED"]).default("PAID"),
+    is_fair: z.boolean().optional(),
   }),
 
   response: z.object({
@@ -36,6 +37,7 @@ export const ExternalSaleSchema = {
     total_cost: z.number().optional(),
     total_profit: z.number().optional(),
     margin_percent: z.number().optional(),
+    is_fair: z.boolean().nullable().optional(),
     created_at: z.date(),
     updated_at: z.date(),
     items: z.array(z.object({

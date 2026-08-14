@@ -1,4 +1,5 @@
 import { db } from '../lib/db.js';
+import type { Knex } from 'knex';
 
 export class CreditFeeRepository {
   private table = 'credit_fee_tiers';
@@ -11,8 +12,9 @@ export class CreditFeeRepository {
     return (await db(this.table).where({ id }).whereNull('deleted_at').first()) || null;
   }
 
-  async findByInstallments(n: number) {
-    return (await db(this.table).where({ installments: n }).whereNull('deleted_at').first()) || null;
+  async findByInstallments(n: number, trx?: Knex.Transaction) {
+    const query = trx ?? db;
+    return (await query(this.table).where({ installments: n }).whereNull('deleted_at').first()) || null;
   }
 
   async update(id: string, data: { percent?: number | undefined; fixed_fee?: number | undefined; is_active?: boolean | undefined }) {

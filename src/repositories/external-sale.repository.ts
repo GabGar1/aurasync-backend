@@ -18,6 +18,7 @@ export interface ExternalSaleInput {
   shipping_cost_owner: number;
   shipping_cost_customer: number;
   status: string;
+  is_fair: boolean;
 }
 
 export class ExternalSaleRepository {
@@ -48,6 +49,7 @@ export class ExternalSaleRepository {
           total_cost: costResult.total_cost,
           total_profit: costResult.total_profit,
           margin_percent: costResult.margin_percent,
+          is_fair: input.is_fair ?? false,
         })
         .returning('*');
 

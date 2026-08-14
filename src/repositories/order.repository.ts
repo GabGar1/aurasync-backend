@@ -1,6 +1,7 @@
 import { db } from '../lib/db.js';
 import type { Knex } from 'knex';
 import { costRepository } from './cost.repository.js';
+import { creditFeeRepository } from './credit-fee.repository.js';
 import { computeOrderCosts, type CostEngineItemInput, type ItemCostSnapshot } from '../lib/cost-engine.js';
 
 // helper: converts a plain DB item row + computed snapshot into the insert payload
@@ -57,6 +58,8 @@ export interface Order {
   utm_term: string | null;
   storefront: string | null;
   customer_email: string | null;
+  is_fair: boolean;
+  monthly_cost_total: number;
   deleted_at?: Date | null;
   created_at: Date;
   updated_at: Date;
@@ -183,34 +186,58 @@ export class OrderRepository {
 
       // after inserting the order and BEFORE stock deduction, resolve variants + components
       const variantIds = items.map(i => i.variant_id);
-      const variants = await trx('product_variants').whereIn('id', variantIds).select('id', 'product_id', 'cost_price', 'packaging_cost', 'platform_fee_percent');
+      const variants = await trx('product_variants')
+        .join('products', 'products.id', 'product_variants.product_id')
+        .whereIn('product_variants.id', variantIds)
+        .select('product_variants.id', 'product_variants.product_id', 'products.subgroup_id', 'product_variants.cost_price', 'product_variants.packaging_cost', 'product_variants.platform_fee_percent');
       const variantMap = new Map(variants.map(v => [v.id, v]));
       const productIds = [...new Set(variants.map(v => v.product_id))];
+      const subgroupIds = [...new Set(variants.map(v => v.subgroup_id).filter(Boolean))] as string[];
+
+      const toComponent = (c: any) => ({
+        id: c.id, name: c.name, type: c.type, category: c.category,
+        value: Number(c.value), calculation_base: c.calculation_base, quantity: c.quantity,
+        max_products_per_package: c.max_products_per_package,
+        consolidates: c.consolidates,
+        applies_to_fair_only: c.applies_to_fair_only,
+      });
+
       const componentsByProduct = new Map<string, Array<any>>();
       for (const row of await costRepository.getComponentsByProductIds(productIds, trx)) {
         if (!componentsByProduct.has(row.product_id)) componentsByProduct.set(row.product_id, []);
-        componentsByProduct.get(row.product_id)!.push({
-          id: row.id, name: row.name, type: row.type, category: row.category,
-          value: Number(row.value), calculation_base: row.calculation_base, quantity: row.quantity,
-        });
+        componentsByProduct.get(row.product_id)!.push(row);
+      }
+      const componentsBySubgroup = new Map<string, Array<any>>();
+      for (const row of await costRepository.getComponentsBySubgroupIds(subgroupIds, trx)) {
+        if (!componentsBySubgroup.has(row.subgroup_id)) componentsBySubgroup.set(row.subgroup_id, []);
+        componentsBySubgroup.get(row.subgroup_id)!.push(row);
       }
 
       const engineItems: CostEngineItemInput[] = items.map(item => {
         const v = variantMap.get(item.variant_id);
         if (!v) throw new Error(`Product variant ${item.variant_id} not found`);
+        const productComps = (componentsByProduct.get(v.product_id) || []).map(toComponent);
+        const subgroupComps = v.subgroup_id ? (componentsBySubgroup.get(v.subgroup_id) || []).map(toComponent) : [];
         return {
           variant_id: item.variant_id,
           product_id: v.product_id,
+          subgroup_id: v.subgroup_id ?? null,
           unit_price: item.unit_price,
           quantity: item.quantity,
           product_cost: Number(v.cost_price || 0),
           legacy_packaging_cost: Number(v.packaging_cost || 0),
           legacy_platform_fee_percent: Number(v.platform_fee_percent || 0),
-          components: (componentsByProduct.get(v.product_id) || []).map((c: any) => ({ ...c, type: c.type as any, category: c.category as any, calculation_base: c.calculation_base as any })),
+          components: [...productComps, ...subgroupComps],
         };
       });
 
-      const costResult = computeOrderCosts(engineItems, { shipping_cost_owner: 0, discount_amount: 0 });
+      const costResult = computeOrderCosts(engineItems, {
+        shipping_cost_owner: 0,
+        discount_amount: 0,
+        is_fair: false,
+        credit_fee: null,
+        total_amount: Number(order.total_amount),
+      });
 
       const insertedItems = await trx(this.itemsTable)
         .insert(items.map((item, idx) => applySnapshot({ ...item, order_id: order.id }, costResult.items[idx]!)))
@@ -339,42 +366,61 @@ export class OrderRepository {
       // 2. Process order items
       const nuvemshopVariantIds = nuvemshopItems.map(item => item.variant_id);
       const internalVariants = await trx('product_variants')
-        .whereIn('nuvemshop_variant_id', nuvemshopVariantIds)
-        .select('id', 'nuvemshop_variant_id', 'product_id', 'cost_price', 'packaging_cost', 'platform_fee_percent');
+        .join('products', 'products.id', 'product_variants.product_id')
+        .whereIn('product_variants.nuvemshop_variant_id', nuvemshopVariantIds)
+        .select('product_variants.id', 'product_variants.nuvemshop_variant_id', 'product_variants.product_id', 'products.subgroup_id', 'product_variants.cost_price', 'product_variants.packaging_cost', 'product_variants.platform_fee_percent');
 
       const variantMap = new Map(internalVariants.map(v => [v.nuvemshop_variant_id, v]));
 
       const productIds = [...new Set(internalVariants.map(v => v.product_id))];
-      const componentsByProduct = new Map<string, Array<{ id: string; name: string; type: string; category: string; value: number; calculation_base: string; quantity: number }>>();
+      const subgroupIds = [...new Set(internalVariants.map(v => v.subgroup_id).filter(Boolean))] as string[];
+
+      const toComponent = (c: any) => ({
+        id: c.id, name: c.name, type: c.type, category: c.category,
+        value: Number(c.value), calculation_base: c.calculation_base, quantity: c.quantity,
+        max_products_per_package: c.max_products_per_package,
+        consolidates: c.consolidates,
+        applies_to_fair_only: c.applies_to_fair_only,
+      });
+
+      const componentsByProduct = new Map<string, Array<any>>();
       for (const row of await costRepository.getComponentsByProductIds(productIds, trx)) {
         if (!componentsByProduct.has(row.product_id)) componentsByProduct.set(row.product_id, []);
-        componentsByProduct.get(row.product_id)!.push({
-          id: row.id, name: row.name, type: row.type, category: row.category,
-          value: Number(row.value), calculation_base: row.calculation_base, quantity: row.quantity,
-        });
+        componentsByProduct.get(row.product_id)!.push(row);
+      }
+      const componentsBySubgroup = new Map<string, Array<any>>();
+      for (const row of await costRepository.getComponentsBySubgroupIds(subgroupIds, trx)) {
+        if (!componentsBySubgroup.has(row.subgroup_id)) componentsBySubgroup.set(row.subgroup_id, []);
+        componentsBySubgroup.get(row.subgroup_id)!.push(row);
       }
 
       const engineItems: CostEngineItemInput[] = [];
       for (const nuvemshopItem of nuvemshopItems) {
         const internalVariant = variantMap.get(nuvemshopItem.variant_id);
         if (!internalVariant) continue;
+        const productComps = (componentsByProduct.get(internalVariant.product_id) || []).map(toComponent);
+        const subgroupComps = internalVariant.subgroup_id ? (componentsBySubgroup.get(internalVariant.subgroup_id) || []).map(toComponent) : [];
         engineItems.push({
           variant_id: internalVariant.id,
           product_id: internalVariant.product_id,
+          subgroup_id: internalVariant.subgroup_id ?? null,
           unit_price: nuvemshopItem.price,
           quantity: nuvemshopItem.quantity,
           product_cost: Number(internalVariant.cost_price || 0),
           legacy_packaging_cost: Number(internalVariant.packaging_cost || 0),
           legacy_platform_fee_percent: Number(internalVariant.platform_fee_percent || 0),
-          components: (componentsByProduct.get(internalVariant.product_id) || []).map(c => ({
-            ...c, type: c.type as any, category: c.category as any, calculation_base: c.calculation_base as any,
-          })),
+          components: [...productComps, ...subgroupComps],
         });
       }
 
+      const installments = order.payment_installments ?? 1;
+      const creditTier = await creditFeeRepository.findByInstallments(installments, trx);
       const costResult = computeOrderCosts(engineItems, {
         shipping_cost_owner: data.shipping_cost_owner ? parseFloat(data.shipping_cost_owner) : 0,
         discount_amount: data.discount ? parseFloat(data.discount) : 0,
+        is_fair: false,
+        credit_fee: creditTier ? { percent: Number(creditTier.percent), fixed_fee: Number(creditTier.fixed_fee) } : null,
+        total_amount: Number(order.total_amount),
       });
       // Freeze the cost columns of previously-synced items so re-syncs do not
       // recompute them from the current component config.
