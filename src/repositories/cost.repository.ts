@@ -1,6 +1,6 @@
 import { db } from '../lib/db.js';
 import type { Knex } from 'knex';
-import type { CostComponent, CostComponentCreate, CostComponentUpdate, CostAssociationCreate } from '../schemas/cost.schema.js';
+import type { CostComponent, CostComponentCreate, CostComponentUpdate, CostAssociationCreate, CostAssociateSubgroup } from '../schemas/cost.schema.js';
 
 export interface ComponentWithQuantity {
   id: string;
@@ -10,13 +10,24 @@ export interface ComponentWithQuantity {
   value: number;
   calculation_base: string;
   quantity: number;
+  max_products_per_package?: number | null;
+  consolidates?: boolean;
+  applies_to_fair_only?: boolean;
 }
 
 export class CostRepository {
   private table = 'cost_components';
   private associationTable = 'product_cost_components';
 
-  async createComponent(data: Omit<CostComponentCreate, 'id' | 'created_at' | 'updated_at'> & { is_active: boolean }): Promise<CostComponent> {
+  async createComponent(data: Omit<CostComponentCreate, 'id' | 'created_at' | 'updated_at' | 'max_products_per_package' | 'allocation_basis' | 'period_start' | 'period_end'> & {
+    is_active: boolean;
+    max_products_per_package?: number | null;
+    consolidates?: boolean;
+    allocation_basis?: string | null;
+    period_start?: string | null;
+    period_end?: string | null;
+    applies_to_fair_only?: boolean;
+  }): Promise<CostComponent> {
     const [row] = await db(this.table).insert(data).returning('*');
     return row;
   }
@@ -81,6 +92,12 @@ export class CostRepository {
         `${this.table}.value`,
         `${this.table}.calculation_base`,
         `${this.table}.is_active`,
+        `${this.table}.max_products_per_package`,
+        `${this.table}.consolidates`,
+        `${this.table}.allocation_basis`,
+        `${this.table}.period_start`,
+        `${this.table}.period_end`,
+        `${this.table}.applies_to_fair_only`,
         `${this.table}.created_at`,
         `${this.table}.updated_at`,
       );
@@ -98,6 +115,12 @@ export class CostRepository {
         value: r.value,
         calculation_base: r.calculation_base,
         is_active: r.is_active,
+        max_products_per_package: r.max_products_per_package,
+        consolidates: r.consolidates,
+        allocation_basis: r.allocation_basis,
+        period_start: r.period_start,
+        period_end: r.period_end,
+        applies_to_fair_only: r.applies_to_fair_only,
         created_at: r.created_at,
         updated_at: r.updated_at,
       },
@@ -120,6 +143,98 @@ export class CostRepository {
         `${this.table}.category`,
         `${this.table}.value`,
         `${this.table}.calculation_base`,
+        `${this.table}.max_products_per_package`,
+        `${this.table}.consolidates`,
+        `${this.table}.applies_to_fair_only`,
+      );
+  }
+
+  async associateSubgroup(data: CostAssociateSubgroup): Promise<{ id: string; subgroup_id: string; cost_component_id: string; quantity: number }> {
+    const [row] = await db('subgroup_cost_components')
+      .insert(data)
+      .onConflict(['subgroup_id', 'cost_component_id'])
+      .merge({ quantity: data.quantity })
+      .returning('*');
+    return row;
+  }
+
+  async hardDeleteSubgroupAssociation(id: string): Promise<boolean> {
+    const result = await db('subgroup_cost_components').where({ id }).del();
+    return result > 0;
+  }
+
+  async listAssociationsBySubgroup(subgroupId: string) {
+    const rows = await db('subgroup_cost_components')
+      .where('subgroup_cost_components.subgroup_id', subgroupId)
+      .join('cost_components', 'cost_components.id', 'subgroup_cost_components.cost_component_id')
+      .whereNull('cost_components.deleted_at')
+      .select(
+        'subgroup_cost_components.id',
+        'subgroup_cost_components.subgroup_id',
+        'subgroup_cost_components.cost_component_id',
+        'subgroup_cost_components.quantity',
+        'cost_components.id as component_id',
+        'cost_components.name',
+        'cost_components.description',
+        'cost_components.type',
+        'cost_components.category',
+        'cost_components.value',
+        'cost_components.calculation_base',
+        'cost_components.is_active',
+        'cost_components.max_products_per_package',
+        'cost_components.consolidates',
+        'cost_components.allocation_basis',
+        'cost_components.period_start',
+        'cost_components.period_end',
+        'cost_components.applies_to_fair_only',
+        'cost_components.created_at',
+        'cost_components.updated_at',
+      );
+    return rows.map((r) => ({
+      id: r.id,
+      subgroup_id: r.subgroup_id,
+      cost_component_id: r.cost_component_id,
+      quantity: r.quantity,
+      component: {
+        id: r.component_id,
+        name: r.name,
+        description: r.description,
+        type: r.type,
+        category: r.category,
+        value: r.value,
+        calculation_base: r.calculation_base,
+        is_active: r.is_active,
+        max_products_per_package: r.max_products_per_package,
+        consolidates: r.consolidates,
+        allocation_basis: r.allocation_basis,
+        period_start: r.period_start,
+        period_end: r.period_end,
+        applies_to_fair_only: r.applies_to_fair_only,
+        created_at: r.created_at,
+        updated_at: r.updated_at,
+      },
+    }));
+  }
+
+  async getComponentsBySubgroupIds(subgroupIds: string[], trx?: Knex.Transaction) {
+    if (subgroupIds.length === 0) return [];
+    const query = (trx ?? db);
+    return query('subgroup_cost_components')
+      .whereIn('subgroup_cost_components.subgroup_id', subgroupIds)
+      .join('cost_components', 'cost_components.id', 'subgroup_cost_components.cost_component_id')
+      .whereNull('cost_components.deleted_at')
+      .select(
+        'subgroup_cost_components.subgroup_id',
+        'subgroup_cost_components.quantity',
+        'cost_components.id',
+        'cost_components.name',
+        'cost_components.type',
+        'cost_components.category',
+        'cost_components.value',
+        'cost_components.calculation_base',
+        'cost_components.max_products_per_package',
+        'cost_components.consolidates',
+        'cost_components.applies_to_fair_only',
       );
   }
 }

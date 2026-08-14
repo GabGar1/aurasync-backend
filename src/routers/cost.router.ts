@@ -51,6 +51,59 @@ export const costRoutes: FastifyPluginAsyncZod = async (fastify) => {
     }
   });
 
+  fastify.post('/associate-subgroup', {
+    onRequest: [fastify.authenticate],
+    preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])],
+    schema: { body: CostSchema.associateSubgroup },
+  }, async (request, reply) => {
+    try {
+      const association = await costService.associateSubgroup(request.body);
+      return reply.code(201).send(association);
+    } catch (error: any) {
+      return reply.code(400).send({ error: error.message });
+    }
+  });
+
+  fastify.post('/associate-batch', {
+    onRequest: [fastify.authenticate],
+    preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])],
+    schema: { body: CostSchema.associateBatch },
+  }, async (request, reply) => {
+    try {
+      const result = await costService.associateBatch(request.body);
+      return reply.code(201).send(result);
+    } catch (error: any) {
+      return reply.code(400).send({ error: error.message });
+    }
+  });
+
+  fastify.delete('/associate-subgroup/:id', {
+    onRequest: [fastify.authenticate],
+    preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])],
+    schema: { params: z.object({ id: z.string().uuid() }) },
+  }, async (request, reply) => {
+    try {
+      const removed = await costService.removeSubgroupAssociation(request.params.id);
+      if (!removed) return reply.code(404).send({ error: 'Association not found' });
+      return reply.code(204).send();
+    } catch (error: any) {
+      return reply.code(400).send({ error: error.message });
+    }
+  });
+
+  fastify.get('/subgroup/:subgroupId', {
+    onRequest: [fastify.authenticate],
+    preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])],
+    schema: { params: z.object({ subgroupId: z.string().uuid() }) },
+  }, async (request, reply) => {
+    try {
+      const associations = await costService.getAssociationsBySubgroup(request.params.subgroupId);
+      return reply.send({ associations });
+    } catch (error: any) {
+      return reply.code(400).send({ error: error.message });
+    }
+  });
+
   fastify.delete('/associate/:id', {
     onRequest: [fastify.authenticate],
     preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])],

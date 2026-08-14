@@ -1,6 +1,7 @@
 import { costRepository } from '../repositories/cost.repository.js';
 import { productRepository } from '../repositories/product.repository.js';
-import { CostSchema, type CostComponentCreate, type CostComponentUpdate, type CostAssociationCreate, type CostSimulateInput } from '../schemas/cost.schema.js';
+import { productSubgroupRepository } from '../repositories/product-subgroup.repository.js';
+import { CostSchema, type CostComponentCreate, type CostComponentUpdate, type CostAssociationCreate, type CostAssociateSubgroup, type CostAssociateBatch, type CostSimulateInput } from '../schemas/cost.schema.js';
 import { computeOrderCosts } from '../lib/cost-engine.js';
 import { db } from '../lib/db.js';
 
@@ -18,6 +19,12 @@ export class CostService {
       value: validated.value,
       calculation_base: validated.calculation_base ?? 'PRICE',
       is_active: validated.is_active ?? true,
+      max_products_per_package: validated.max_products_per_package ?? null,
+      consolidates: validated.consolidates ?? false,
+      allocation_basis: validated.allocation_basis ?? null,
+      period_start: validated.period_start ?? null,
+      period_end: validated.period_end ?? null,
+      applies_to_fair_only: validated.applies_to_fair_only ?? false,
       ...(validated.description !== undefined && { description: validated.description }),
     };
     return costRepository.createComponent(payload);
@@ -93,6 +100,47 @@ export class CostService {
     );
 
     return result.items[0];
+  }
+
+  async associateSubgroup(data: CostAssociateSubgroup) {
+    const validated = CostSchema.associateSubgroup.parse(data);
+    const subgroup = await productSubgroupRepository.findById(validated.subgroup_id);
+    if (!subgroup) throw new Error('Subgroup not found');
+    const component = await costRepository.findComponentById(validated.cost_component_id);
+    if (!component) throw new Error('Cost component not found');
+    return costRepository.associateSubgroup(validated);
+  }
+
+  async removeSubgroupAssociation(id: string) {
+    return costRepository.hardDeleteSubgroupAssociation(id);
+  }
+
+  async getAssociationsBySubgroup(subgroupId: string) {
+    const subgroup = await productSubgroupRepository.findById(subgroupId);
+    if (!subgroup) throw new Error('Subgroup not found');
+    return costRepository.listAssociationsBySubgroup(subgroupId);
+  }
+
+  async associateBatch(data: CostAssociateBatch) {
+    const validated = CostSchema.associateBatch.parse(data);
+    const component = await costRepository.findComponentById(validated.cost_component_id);
+    if (!component) throw new Error('Cost component not found');
+
+    const results: { product: Array<{ product_id: string }>; subgroup: Array<{ subgroup_id: string }> } = { product: [], subgroup: [] };
+
+    for (const productId of validated.product_ids ?? []) {
+      const product = await productRepository.findById(productId);
+      if (!product) throw new Error(`Product ${productId} not found`);
+      const assoc = await costRepository.associateComponent({ product_id: productId, cost_component_id: validated.cost_component_id, quantity: validated.quantity });
+      results.product.push({ product_id: assoc.product_id });
+    }
+    for (const subgroupId of validated.subgroup_ids ?? []) {
+      const subgroup = await productSubgroupRepository.findById(subgroupId);
+      if (!subgroup) throw new Error(`Subgroup ${subgroupId} not found`);
+      const assoc = await costRepository.associateSubgroup({ subgroup_id: subgroupId, cost_component_id: validated.cost_component_id, quantity: validated.quantity });
+      results.subgroup.push({ subgroup_id: assoc.subgroup_id });
+    }
+    return results;
   }
 }
 
