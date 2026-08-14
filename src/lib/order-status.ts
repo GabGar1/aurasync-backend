@@ -87,6 +87,10 @@ export function enrichOrder(order: Order & { items: OrderItem[] }) {
     total_cost: Number(order.total_cost || 0),
     total_profit: Number(order.total_profit || 0),
     margin_percent: Number(order.margin_percent || 0),
+    is_fair: (order as any).is_fair ?? false,
+    monthly_cost_total: Number((order as any).monthly_cost_total || 0),
+    total_cost_with_monthly: Number(order.total_cost || 0) + Number((order as any).monthly_cost_total || 0),
+    monthly_allocations: (order as any).monthly_allocations ?? [],
     items: order.items.map(enrichOrderItem),
   };
 }

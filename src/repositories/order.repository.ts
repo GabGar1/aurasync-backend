@@ -502,9 +502,12 @@ export class OrderRepository {
     const items = await db(this.itemsTable)
       .where({ order_id: id, status: true });
 
+    const monthly_allocations = await db('order_monthly_allocations').where({ order_id: id });
+
     return {
       ...order,
-      items
+      items,
+      monthly_allocations,
     };
   }
 
@@ -546,7 +549,8 @@ export class OrderRepository {
       baseOrders.map(async (order) => {
         const items = await db(this.itemsTable)
           .where({ order_id: order.id, status: true });
-        return { ...order, items };
+        const monthly_allocations = await db('order_monthly_allocations').where({ order_id: order.id });
+        return { ...order, items, monthly_allocations };
       })
     );
 
