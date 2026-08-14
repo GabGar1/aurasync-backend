@@ -1,7 +1,11 @@
-export type CostComponentType = "FIXED" | "PERCENT" | "PER_ORDER" | "MONTHLY";
+export type CostComponentType =
+  | "FIXED" | "PERCENT" | "PER_ORDER" | "PACKAGING" | "MONTHLY_FIXED" | "MONTHLY_PERCENT";
 export type CostComponentCategory =
-  | "PACKAGING" | "TAX" | "FEE" | "SHIPPING" | "OPERATIONAL" | "MARKETING" | "OTHER";
+  | "PACKAGING" | "TAX" | "FEE" | "SHIPPING" | "OPERATIONAL"
+  | "MARKETING" | "OTHER" | "ACQUISITION" | "CREDIT_FEE";
 export type CalculationBase = "PRICE" | "COST";
+
+type SnapshotCategory = "PACKAGING" | "TAX" | "FEE" | "SHIPPING" | "OPERATIONAL" | "MARKETING" | "OTHER";
 
 export interface CostComponentInput {
   id: string;
@@ -10,18 +14,30 @@ export interface CostComponentInput {
   category: CostComponentCategory;
   value: number;
   calculation_base: CalculationBase;
-  quantity: number; // association quantity
+  quantity: number;
+  max_products_per_package?: number | null;
+  consolidates?: boolean;
+  applies_to_fair_only?: boolean;
 }
 
 export interface CostEngineItemInput {
   variant_id: string;
   product_id: string;
+  subgroup_id?: string | null;
   unit_price: number;
   quantity: number;
-  product_cost: number; // variant.cost_price
+  product_cost: number;
   legacy_packaging_cost: number;
   legacy_platform_fee_percent: number;
   components: CostComponentInput[];
+}
+
+export interface OrderLevelInput {
+  shipping_cost_owner: number;
+  discount_amount: number;
+  is_fair?: boolean;
+  credit_fee?: { percent: number; fixed_fee: number } | null;
+  total_amount?: number;
 }
 
 export interface CostBreakdownEntry {
@@ -62,33 +78,40 @@ const round2 = (n: number): number => Math.round(n * 100) / 100;
 interface PerOrderFee {
   id: string | null;
   value: number;
-  category: CostComponentCategory;
+  category: SnapshotCategory;
   name: string;
 }
 
 interface ItemBaseCost {
   input: CostEngineItemInput;
-  perUnit: Record<CostComponentCategory, number>;
+  acquisition: number;
+  perUnit: Record<SnapshotCategory, number>;
   breakdown: CostBreakdownEntry[];
   perOrderFees: PerOrderFee[];
 }
 
-function computeItemBase(input: CostEngineItemInput): ItemBaseCost {
-  const perUnit: Record<CostComponentCategory, number> = {
+function computeItemBase(input: CostEngineItemInput, isFair: boolean): ItemBaseCost {
+  const perUnit: Record<SnapshotCategory, number> = {
     PACKAGING: 0, TAX: 0, FEE: 0, SHIPPING: 0, OPERATIONAL: 0, MARKETING: 0, OTHER: 0,
   };
+  let acquisition = 0;
   const breakdown: CostBreakdownEntry[] = [];
   const perOrderFees: PerOrderFee[] = [];
 
-  breakdown.push({
-    component_id: null,
-    name: "Custo do produto",
-    type: "PRODUCT",
-    category: "PRODUCT",
-    unit_value: input.product_cost,
-    quantity: 1,
-    line_total: input.product_cost,
-  });
+  const acquisitionComponents = input.components.filter(
+    (c) => c.type === "FIXED" && c.category === "ACQUISITION" && !(c.applies_to_fair_only && !isFair)
+  );
+
+  if (acquisitionComponents.length > 0) {
+    for (const c of acquisitionComponents) {
+      const unitValue = c.value * c.quantity;
+      acquisition += unitValue;
+      breakdown.push({ component_id: c.id, name: c.name, type: "FIXED", category: "ACQUISITION", unit_value: unitValue, quantity: 1, line_total: unitValue });
+    }
+  } else {
+    acquisition = input.product_cost;
+    breakdown.push({ component_id: null, name: "Custo do produto", type: "PRODUCT", category: "PRODUCT", unit_value: input.product_cost, quantity: 1, line_total: input.product_cost });
+  }
 
   if (input.components.length === 0) {
     const packaging = input.legacy_packaging_cost || 0;
@@ -99,14 +122,16 @@ function computeItemBase(input: CostEngineItemInput): ItemBaseCost {
     perUnit.FEE = fee;
     if (packaging) breakdown.push({ component_id: null, name: "Embalagem (legado)", type: "FIXED", category: "PACKAGING", unit_value: packaging, quantity: 1, line_total: packaging });
     if (fee) breakdown.push({ component_id: null, name: "Taxa da plataforma (legado)", type: "PERCENT", category: "FEE", unit_value: fee, quantity: 1, line_total: fee });
-    return { input, perUnit, breakdown, perOrderFees };
+    return { input, acquisition, perUnit, breakdown, perOrderFees };
   }
 
   for (const c of input.components) {
-    if (c.type === "MONTHLY") continue;
+    if (c.type === "MONTHLY_FIXED" || c.type === "MONTHLY_PERCENT" || c.type === "PACKAGING") continue;
+    if (c.applies_to_fair_only && !isFair) continue;
+    if (c.type === "FIXED" && c.category === "ACQUISITION") continue;
 
     if (c.type === "PER_ORDER") {
-      perOrderFees.push({ id: c.id, value: c.value, category: c.category, name: c.name });
+      perOrderFees.push({ id: c.id, value: c.value, category: (c.category as SnapshotCategory), name: c.name });
       continue;
     }
 
@@ -118,36 +143,92 @@ function computeItemBase(input: CostEngineItemInput): ItemBaseCost {
       unitValue = (base * c.value) / 100;
     }
 
-    perUnit[c.category] += unitValue;
-    breakdown.push({
-      component_id: c.id, name: c.name, type: c.type, category: c.category,
-      unit_value: unitValue, quantity: 1, line_total: unitValue,
-    });
+    if (c.category === "ACQUISITION") {
+      acquisition += unitValue;
+    } else {
+      perUnit[c.category as SnapshotCategory] += unitValue;
+    }
+    breakdown.push({ component_id: c.id, name: c.name, type: c.type, category: c.category, unit_value: unitValue, quantity: 1, line_total: unitValue });
   }
 
-  return { input, perUnit, breakdown, perOrderFees };
+  return { input, acquisition, perUnit, breakdown, perOrderFees };
+}
+
+interface PackagingBox {
+  component_id: string;
+  name: string;
+  boxes: number;
+  cost: number;
+}
+
+function computePackaging(items: CostEngineItemInput[], isFair: boolean): { totalCost: number; boxes: PackagingBox[] } {
+  const bySubgroup = new Map<string, { component: CostComponentInput; qty: number }>();
+
+  for (const item of items) {
+    for (const c of item.components) {
+      if (c.type !== "PACKAGING") continue;
+      if (c.applies_to_fair_only && !isFair) continue;
+      const key = item.subgroup_id ?? "";
+      const existing = bySubgroup.get(key);
+      if (existing) existing.qty += item.quantity;
+      else bySubgroup.set(key, { component: c, qty: item.quantity });
+    }
+  }
+
+  const totalQty = items.reduce((s, i) => s + i.quantity, 0);
+  const entries = [...bySubgroup.values()];
+
+  const consolidators = entries.filter((e) => e.component.consolidates && e.qty > 0);
+  if (consolidators.length > 0) {
+    const best = consolidators.reduce((a, b) =>
+      ((b.component.max_products_per_package ?? 0) > (a.component.max_products_per_package ?? 0) ? b : a));
+    const capacity = Math.max(best.component.max_products_per_package ?? 1, 1);
+    const boxes = Math.ceil(totalQty / capacity);
+    const cost = round2(boxes * best.component.value);
+    return { totalCost: cost, boxes: [{ component_id: best.component.id, name: best.component.name, boxes, cost }] };
+  }
+
+  let totalCost = 0;
+  const boxes: PackagingBox[] = [];
+  for (const e of entries) {
+    if (e.qty === 0) continue;
+    const capacity = Math.max(e.component.max_products_per_package ?? 1, 1);
+    const b = Math.ceil(e.qty / capacity);
+    const cost = round2(b * e.component.value);
+    totalCost += cost;
+    boxes.push({ component_id: e.component.id, name: e.component.name, boxes: b, cost });
+  }
+  return { totalCost: round2(totalCost), boxes };
 }
 
 export function computeOrderCosts(
   items: CostEngineItemInput[],
-  orderLevel: { shipping_cost_owner: number; discount_amount: number }
+  orderLevel: OrderLevelInput
 ): OrderCostResult {
-  const baseCosts = items.map(computeItemBase);
+  const isFair = orderLevel.is_fair ?? false;
+  const baseCosts = items.map((i) => computeItemBase(i, isFair));
   const totalWeight = items.reduce((sum, i) => sum + i.unit_price * i.quantity, 0);
   const freight = orderLevel.shipping_cost_owner || 0;
-  const allPerOrderFees: PerOrderFee[] = baseCosts.reduce(
-    (acc, b) => acc.concat(b.perOrderFees), [] as PerOrderFee[]
-  );
+
+  const packaging = computePackaging(items, isFair);
+
+  const creditFee = orderLevel.credit_fee
+    ? round2((orderLevel.total_amount ?? 0) * orderLevel.credit_fee.percent / 100 + orderLevel.credit_fee.fixed_fee)
+    : 0;
+
+  const allPerOrderFees: PerOrderFee[] = baseCosts.reduce((acc, b) => acc.concat(b.perOrderFees), [] as PerOrderFee[]);
+  if (creditFee > 0) allPerOrderFees.push({ id: null, value: creditFee, category: "FEE", name: "Taxa de crédito" });
 
   const snapshots: ItemCostSnapshot[] = baseCosts.map((b) => {
     const { input } = b;
     const weight = input.unit_price * input.quantity;
     const share = totalWeight > 0 ? weight / totalWeight : 0;
 
-    const perUnit: Record<CostComponentCategory, number> = { ...b.perUnit };
+    const perUnit: Record<SnapshotCategory, number> = { ...b.perUnit };
 
     if (share > 0) {
       perUnit.SHIPPING += round2((freight * share) / input.quantity);
+      perUnit.PACKAGING += round2((packaging.totalCost * share) / input.quantity);
     }
     for (const f of allPerOrderFees) {
       perUnit[f.category] += round2((f.value * share) / input.quantity);
@@ -158,6 +239,10 @@ export function computeOrderCosts(
       const freightAllocation = round2((freight * share) / input.quantity);
       allocationBreakdown.push({ component_id: null, name: "Frete (rateado)", type: "ALLOCATION", category: "SHIPPING", unit_value: freightAllocation, quantity: 1, line_total: freightAllocation });
     }
+    if (share > 0 && packaging.totalCost > 0) {
+      const packAlloc = round2((packaging.totalCost * share) / input.quantity);
+      allocationBreakdown.push({ component_id: null, name: "Embalagem (rateado)", type: "ALLOCATION", category: "PACKAGING", unit_value: packAlloc, quantity: 1, line_total: packAlloc });
+    }
     for (const f of allPerOrderFees) {
       const allocated = round2((f.value * share) / input.quantity);
       if (allocated === 0) continue;
@@ -165,7 +250,7 @@ export function computeOrderCosts(
     }
 
     const unit_total_cost = round2(
-      input.product_cost + perUnit.PACKAGING + perUnit.TAX + perUnit.FEE +
+      b.acquisition + perUnit.PACKAGING + perUnit.TAX + perUnit.FEE +
       perUnit.SHIPPING + perUnit.OPERATIONAL + perUnit.MARKETING + perUnit.OTHER
     );
 
@@ -177,7 +262,7 @@ export function computeOrderCosts(
 
     return {
       variant_id: input.variant_id,
-      unit_cost: input.product_cost,
+      unit_cost: round2(b.acquisition),
       unit_packaging_cost: round2(perUnit.PACKAGING),
       unit_platform_fee: round2(perUnit.FEE),
       unit_tax: round2(perUnit.TAX),

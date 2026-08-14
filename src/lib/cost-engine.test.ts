@@ -6,6 +6,7 @@ function baseItem(overrides: Partial<CostEngineItemInput> = {}): CostEngineItemI
   return {
     variant_id: "11111111-1111-1111-1111-111111111111",
     product_id: "22222222-2222-2222-2222-222222222222",
+    subgroup_id: null,
     unit_price: 100,
     quantity: 1,
     product_cost: 40,
@@ -88,9 +89,9 @@ describe("CostEngine", () => {
     assert.strictEqual(v1.unit_profit, 45); // 100 - 10 (25% of 40) - 45
   });
 
-  it("ignores MONTHLY components", () => {
+  it("ignores MONTHLY_FIXED components at sale time", () => {
     const item = baseItem({ components: [
-      { id: "c1", name: "Contadora", type: "MONTHLY", category: "OPERATIONAL", value: 500, calculation_base: "PRICE", quantity: 1 },
+      { id: "c1", name: "Contadora", type: "MONTHLY_FIXED", category: "OPERATIONAL", value: 500, calculation_base: "PRICE", quantity: 1 },
     ] });
     const result = computeOrderCosts([item], { shipping_cost_owner: 0, discount_amount: 0 });
     assert.strictEqual(result.items[0]!.unit_operational_cost, 0);
@@ -117,5 +118,59 @@ describe("CostEngine", () => {
     const result = computeOrderCosts([item], { shipping_cost_owner: 0, discount_amount: 0 });
     const breakdown = result.items[0]!.cost_breakdown;
     assert.ok(!breakdown.some(e => e.type === "ALLOCATION" || e.name.endsWith("(rateado)")));
+  });
+
+  it("uses ACQUISITION components as unit_cost instead of product_cost", () => {
+    const item = baseItem({
+      components: [
+        { id: "c1", name: "Aquisição", type: "FIXED", category: "ACQUISITION", value: 10, calculation_base: "PRICE", quantity: 2 },
+      ],
+    });
+    const result = computeOrderCosts([item], { shipping_cost_owner: 0, discount_amount: 0 });
+    assert.strictEqual(result.items[0]!.unit_cost, 20);
+    assert.strictEqual(result.items[0]!.unit_total_cost, 20);
+  });
+
+  it("computes packaging boxes by capacity (no consolidation)", () => {
+    const packaging = { id: "pk", name: "Caixa A", type: "PACKAGING" as const, category: "PACKAGING" as const, value: 3, calculation_base: "PRICE" as const, quantity: 1, max_products_per_package: 6 };
+    const items = [1, 2, 3, 4, 5, 6, 7].map((n) => baseItem({
+      variant_id: `v${n}`, subgroup_id: "sg-a", unit_price: 10, quantity: 1, components: [packaging],
+    }));
+    const result = computeOrderCosts(items, { shipping_cost_owner: 0, discount_amount: 0 });
+    const totalPack = result.items.reduce((s, i) => s + i.unit_packaging_cost, 0);
+    // ceil(7/6) = 2 boxes = 6; per-item rounding drift is a known quirk
+    assert.ok(Math.abs(totalPack - 6) < 0.1);
+    assert.ok(Math.abs(result.total_cost - 286) < 0.1);
+  });
+
+  it("consolidator packaging absorbs other packaging", () => {
+    const packA = { id: "pkA", name: "Caixa A", type: "PACKAGING" as const, category: "PACKAGING" as const, value: 3, calculation_base: "PRICE" as const, quantity: 1, max_products_per_package: 6, consolidates: false };
+    const packB = { id: "pkB", name: "Caixa B", type: "PACKAGING" as const, category: "PACKAGING" as const, value: 9, calculation_base: "PRICE" as const, quantity: 1, max_products_per_package: 6, consolidates: true };
+    const items = [
+      baseItem({ variant_id: "a1", subgroup_id: "sg-a", unit_price: 10, quantity: 5, components: [packA] }),
+      baseItem({ variant_id: "b1", subgroup_id: "sg-b", unit_price: 10, quantity: 1, components: [packB] }),
+    ];
+    const result = computeOrderCosts(items, { shipping_cost_owner: 0, discount_amount: 0 });
+    let totalPack = 0;
+    result.items.forEach((s, idx) => { totalPack += s.unit_packaging_cost * items[idx]!.quantity; });
+    assert.strictEqual(Math.round(totalPack * 100) / 100, 9);
+  });
+
+  it("applies credit fee by installments and total_amount", () => {
+    const item = baseItem({
+      unit_price: 100, quantity: 1,
+      components: [{ id: "dummy", name: "X", type: "FIXED", category: "OTHER", value: 1, calculation_base: "PRICE", quantity: 1 }],
+    });
+    const result = computeOrderCosts([item], { shipping_cost_owner: 0, discount_amount: 0, total_amount: 100, credit_fee: { percent: 5.19, fixed_fee: 0.35 } });
+    assert.strictEqual(result.items[0]!.unit_platform_fee, 5.54);
+  });
+
+  it("applies fair-only components only when is_fair", () => {
+    const fairComp = { id: "fair", name: "Custo feira", type: "FIXED" as const, category: "OTHER" as const, value: 5, calculation_base: "PRICE" as const, quantity: 1, applies_to_fair_only: true };
+    const item = baseItem({ components: [fairComp] });
+    const notFair = computeOrderCosts([item], { shipping_cost_owner: 0, discount_amount: 0, is_fair: false });
+    assert.strictEqual(notFair.items[0]!.unit_other_cost, 0);
+    const fair = computeOrderCosts([item], { shipping_cost_owner: 0, discount_amount: 0, is_fair: true });
+    assert.strictEqual(fair.items[0]!.unit_other_cost, 5);
   });
 });

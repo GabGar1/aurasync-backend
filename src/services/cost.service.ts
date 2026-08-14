@@ -78,10 +78,10 @@ export class CostService {
     const componentInputs = components.map(c => ({
       id: c.id,
       name: c.name,
-      type: c.type as 'FIXED' | 'PERCENT' | 'PER_ORDER' | 'MONTHLY',
-      category: c.category as 'PACKAGING' | 'TAX' | 'FEE' | 'SHIPPING' | 'OPERATIONAL' | 'MARKETING' | 'OTHER',
+      type: c.type as any,
+      category: c.category as any,
       value: Number(c.value),
-      calculation_base: c.calculation_base as 'PRICE' | 'COST',
+      calculation_base: c.calculation_base as any,
       quantity: c.quantity,
     }));
 
