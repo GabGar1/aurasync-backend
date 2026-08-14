@@ -14,6 +14,7 @@ import { authRoutes } from './routers/auth.router.js';
 import { costRoutes } from './routers/cost.router.js';
 import { externalSaleRoutes } from './routers/external-sale.router.js';
 import { customerRoutes } from './routers/customer.router.js';
+import { productSubgroupRoutes } from './routers/product-subgroup.router.js';
 import {fastifySwagger} from "@fastify/swagger";
 import {fastifySwaggerUi} from "@fastify/swagger-ui";
 import {fastifyCors} from "@fastify/cors";
@@ -100,6 +101,7 @@ app.register(authRoutes, { prefix: '/api/auth' });
 app.register(costRoutes, { prefix: '/api/cost-components' });
 app.register(externalSaleRoutes, { prefix: '/api/external-sales' });
 app.register(customerRoutes, { prefix: '/api/customers' });
+app.register(productSubgroupRoutes, { prefix: '/api/product-subgroups' });
 
 const start = async () => {
   try {
