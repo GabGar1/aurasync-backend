@@ -2,13 +2,17 @@ import { db } from '../lib/db.js';
 
 export const cleanupDatabase = async () => {
   const tables = [
+    'order_monthly_allocations',
     'inventory_transactions',
     'order_items',
     'orders',
     'product_variants',
     'products',
+    'subgroup_cost_components',
     'product_cost_components',
     'cost_components',
+    'credit_fee_tiers',
+    'product_subgroups',
     'customers'
   ];
 
