@@ -1,4 +1,5 @@
 import { dashboardRepository } from "../repositories/dashboard.repository.js";
+import { translateFulfillmentStatus } from "../lib/order-status.js";
 
 export class DashboardService {
   async getStockStats(days = 30) {
@@ -20,12 +21,17 @@ export class DashboardService {
     };
   }
 
-  async getMarketingStats(days = 30, dates: { start?: Date; end?: Date } = {}) {
+  async getMarketingStats(days = 30, dates: { start_date?: string; end_date?: string } = {}) {
     return dashboardRepository.getMarketingStats(days, dates);
   }
 
-  async getOrdersStats(days = 30, dates: { start?: Date; end?: Date } = {}) {
-    return dashboardRepository.getOrdersStats(days, dates);
+  async getOrdersStats(days = 30, dates: { start_date?: string; end_date?: string } = {}) {
+    const stats = await dashboardRepository.getOrdersStats(days, dates);
+    stats.by_status = stats.by_status.map((s: any) => ({
+      ...s,
+      status_label: translateFulfillmentStatus(s.status),
+    }));
+    return stats;
   }
 }
 

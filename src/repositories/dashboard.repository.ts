@@ -1,13 +1,26 @@
 import { db } from "../lib/db.js";
 
+const STORE_TZ_OFFSET = "-03:00"; // America/Sao_Paulo (sem DST desde 2019)
+
+function localDateToUtc(dateStr: string, endOfDay = false): Date {
+  const time = endOfDay ? "23:59:59.999" : "00:00:00";
+  return new Date(`${dateStr}T${time}${STORE_TZ_OFFSET}`);
+}
+
 function validOrderFilter(query: any) {
   return query.whereNull('orders.deleted_at').where('orders.status', '<>', 'CANCELED');
 }
 
 export class DashboardRepository {
-  private dateWindow(days: number, dates: { start?: Date; end?: Date } = {}) {
-    const end = dates.end ?? new Date();
-    const start = dates.start ?? new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  private dateWindow(days: number, dates: { start_date?: string; end_date?: string } = {}) {
+    if (dates.start_date && dates.end_date) {
+      return {
+        start: localDateToUtc(dates.start_date),
+        end: localDateToUtc(dates.end_date, true),
+      };
+    }
+    const end = new Date();
+    const start = new Date(end.getTime() - days * 24 * 60 * 60 * 1000);
     return { start, end };
   }
 
@@ -132,7 +145,7 @@ export class DashboardRepository {
       .orderBy("days_without_sale", "desc");
   }
 
-  async getMarketingStats(days = 30, dates: { start?: Date; end?: Date } = {}) {
+  async getMarketingStats(days = 30, dates: { start_date?: string; end_date?: string } = {}) {
     const { start, end } = this.dateWindow(days, dates);
 
     const baseQuery = validOrderFilter(
@@ -202,7 +215,7 @@ export class DashboardRepository {
     };
   }
 
-  async getOrdersStats(days = 30, dates: { start?: Date; end?: Date } = {}) {
+  async getOrdersStats(days = 30, dates: { start_date?: string; end_date?: string } = {}) {
     const { start, end } = this.dateWindow(days, dates);
 
     const baseQuery = validOrderFilter(
@@ -211,11 +224,14 @@ export class DashboardRepository {
         .andWhere("orders.created_at", "<=", end)
     );
 
+    const localHourExpr =
+      "EXTRACT(HOUR FROM (orders.created_at AT TIME ZONE 'America/Sao_Paulo'))::int";
+
     const byHour = await baseQuery
       .clone()
-      .groupBy(db.raw("EXTRACT(HOUR FROM orders.created_at)::int"))
+      .groupBy(db.raw(localHourExpr))
       .select(
-        db.raw("EXTRACT(HOUR FROM orders.created_at)::int as hour"),
+        db.raw(`${localHourExpr} as hour`),
         db.raw("COUNT(*)::int as orders"),
         db.raw("COALESCE(SUM(total_amount), 0)::float8 as revenue")
       )
@@ -231,10 +247,11 @@ export class DashboardRepository {
       .whereNull("orders.deleted_at")
       .whereNull("product_variants.deleted_at")
       .whereNull("products.deleted_at")
-      .groupBy("products.id", "products.name", "product_variants.name")
+      .groupBy("products.id", "products.name", "products.category", "product_variants.name")
       .select(
         "products.id as product_id",
         "products.name as product_name",
+        "products.category",
         "product_variants.name as variant_name",
         db.raw("SUM(order_items.quantity)::int as total_sold"),
         db.raw(
@@ -253,19 +270,22 @@ export class DashboardRepository {
 
     const revenueTrend = await baseQuery
       .clone()
-      .groupBy(db.raw("DATE(orders.created_at)"))
+      .groupBy(db.raw("(orders.created_at AT TIME ZONE 'America/Sao_Paulo')::date"))
       .select(
-        db.raw("DATE(orders.created_at)::text as date"),
+        db.raw("(orders.created_at AT TIME ZONE 'America/Sao_Paulo')::date::text as date"),
         db.raw("COALESCE(SUM(total_amount), 0)::float8 as revenue"),
         db.raw("COUNT(*)::int as orders")
       )
-      .orderBy("date", "desc")
-      .limit(30);
+      .orderBy("date", "asc")
+      .limit(366);
 
     const byStatus = await baseQuery
       .clone()
-      .groupBy("status")
-      .select("status", db.raw("COUNT(*)::int as count"))
+      .groupBy(db.raw("COALESCE(orders.fulfillment_status, 'PENDING')"))
+      .select(
+        db.raw("COALESCE(orders.fulfillment_status, 'PENDING') as status"),
+        db.raw("COUNT(*)::int as count")
+      )
       .orderBy("count", "desc");
 
     const customerStats = await baseQuery

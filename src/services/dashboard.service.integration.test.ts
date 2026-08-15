@@ -37,6 +37,7 @@ describe("DashboardService Integration Tests", () => {
       id: orderId,
       customer_name: "Test Customer",
       status: "PAID",
+      fulfillment_status: "DELIVERED",
       total_amount: 200.00,
       storefront: "web",
       shipping_province: "SP",
@@ -127,13 +128,72 @@ describe("DashboardService Integration Tests", () => {
     assert.strictEqual(result.revenue_trend.length, 1);
 
     assert.ok(Array.isArray(result.by_status));
-    const paid = result.by_status.find((s) => s.status === "PAID");
-    assert.ok(paid);
-    assert.strictEqual(paid.count, 1);
+    const delivered = result.by_status.find((s) => s.status === "DELIVERED");
+    assert.ok(delivered);
+    assert.strictEqual(delivered.count, 1);
+    assert.strictEqual(delivered.status_label, "Entregue");
 
     assert.strictEqual(result.repeat_customers.unique_customers, 1);
     assert.strictEqual(result.repeat_customers.repeat_customers, 0);
     assert.strictEqual(result.repeat_customers.repeat_rate, 0);
+  });
+
+  it("by_status groups by fulfillment status with translated labels (NULL -> Pendente)", async () => {
+    const statuses = [
+      { id: "00000000-0000-0000-0000-000000000010", fulfillment_status: "UNPACKED" },
+      { id: "00000000-0000-0000-0000-000000000011", fulfillment_status: "DISPATCHED" },
+      { id: "00000000-0000-0000-0000-000000000012", fulfillment_status: "MARKED_AS_FULFILLED" },
+      { id: "00000000-0000-0000-0000-000000000013", fulfillment_status: null },
+    ];
+    for (const s of statuses) {
+      await db("orders").insert({
+        id: s.id,
+        customer_name: "Fulfillment Customer",
+        status: "PAID",
+        fulfillment_status: s.fulfillment_status,
+        total_amount: 100.00,
+        created_at: new Date(),
+      });
+    }
+
+    const result = await dashboardService.getOrdersStats(30);
+    const labels: Record<string, string> = {
+      UNPACKED: "Empacotando",
+      DISPATCHED: "Despachado",
+      MARKED_AS_FULFILLED: "Marcado como Concluído",
+      PENDING: "Pendente",
+    };
+    for (const [status, label] of Object.entries(labels)) {
+      const row = result.by_status.find((s: any) => s.status === status);
+      assert.ok(row, `missing by_status row for ${status}`);
+      assert.strictEqual(row.status_label, label);
+    }
+    assert.strictEqual(
+      result.by_status.find((s: any) => s.status === "UNPACKED").count,
+      1
+    );
+    assert.strictEqual(
+      result.by_status.find((s: any) => s.status === "DISPATCHED").count,
+      1
+    );
+    assert.strictEqual(
+      result.by_status.find((s: any) => s.status === "MARKED_AS_FULFILLED").count,
+      1
+    );
+
+    await db("orders")
+      .whereIn(
+        "id",
+        statuses.map((s) => s.id)
+      )
+      .del();
+  });
+
+  it("includes product category on top products", async () => {
+    const result = await dashboardService.getOrdersStats(30);
+    const top = result.top_products.find((p: any) => p.product_id === productId);
+    assert.ok(top);
+    assert.strictEqual(top.category, "Category A");
   });
 
   it("excludes CANCELED orders from metrics", async () => {
@@ -153,9 +213,48 @@ describe("DashboardService Integration Tests", () => {
   it("respects explicit date filters", async () => {
     const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
     const result = await dashboardService.getMarketingStats(30, {
-      start: new Date(tomorrow),
-      end: new Date(tomorrow),
+      start_date: tomorrow,
+      end_date: tomorrow,
     });
     assert.strictEqual(result.by_storefront.length, 0);
+  });
+
+  it("filters dashboard stats by the store's local day (America/Sao_Paulo)", async () => {
+    const boundaryOrderId = "00000000-0000-0000-0000-000000000099";
+    // 2026-08-01T02:30Z = 31/07/2026 23:30 em America/Sao_Paulo
+    await db("orders").insert({
+      id: boundaryOrderId,
+      customer_name: "Boundary Customer",
+      status: "PAID",
+      total_amount: 50.00,
+      created_at: new Date("2026-08-01T02:30:00.000Z"),
+    });
+    await db("order_items").insert({
+      order_id: boundaryOrderId,
+      variant_id: variantId,
+      quantity: 1,
+      unit_price: 50.00,
+    });
+
+    const onLocalDay = await dashboardService.getOrdersStats(30, {
+      start_date: "2026-07-31",
+      end_date: "2026-07-31",
+    });
+    const julyTrend = onLocalDay.revenue_trend.find((d: any) => d.date === "2026-07-31");
+    assert.ok(julyTrend, "order realized on 2026-07-31 local should appear in that day's trend");
+    assert.ok(
+      onLocalDay.by_hour.some((h: any) => h.hour === 23),
+      "order at 23:30 local must be bucketed in hour 23, not UTC hour 2"
+    );
+
+    const onUtcDay = await dashboardService.getOrdersStats(30, {
+      start_date: "2026-08-01",
+      end_date: "2026-08-01",
+    });
+    const augustTrend = onUtcDay.revenue_trend.find((d: any) => d.date === "2026-08-01");
+    assert.ok(
+      !augustTrend || augustTrend.orders === 0,
+      "order realized on 2026-07-31 local must NOT count for 2026-08-01"
+    );
   });
 });

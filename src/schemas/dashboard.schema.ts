@@ -95,6 +95,7 @@ export const HourStats = z.object({
 export const TopProductItem = z.object({
   product_id: z.string().uuid(),
   product_name: z.string(),
+  category: z.string().nullable(),
   variant_name: z.string().nullable(),
   total_sold: z.coerce.number().int(),
   revenue: z.coerce.number(),
@@ -108,6 +109,7 @@ export const RevenueTrendItem = z.object({
 
 export const OrderStatusStats = z.object({
   status: z.string(),
+  status_label: z.string(),
   count: z.coerce.number().int(),
 });
 
