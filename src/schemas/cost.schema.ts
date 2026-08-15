@@ -106,6 +106,17 @@ export const CostSchema = {
     }
   }),
 
+  associateSubgroupBatch: z.object({
+    subgroup_id: z.uuid("Invalid subgroup ID"),
+    cost_component_ids: z.array(z.uuid()).min(1, "cost_component_ids is required"),
+    quantity: z.number().int().positive().default(1),
+  }),
+
+  deleteSubgroupAssociations: z.object({
+    subgroup_id: z.uuid("Invalid subgroup ID"),
+    cost_component_ids: z.array(z.uuid()).min(1, "cost_component_ids is required"),
+  }),
+
   associateResponse: CostAssociationResponseSchema,
 
   simulate: z.object({
@@ -151,3 +162,5 @@ export type CostSimulateInput = z.infer<typeof CostSchema.simulate>;
 export type CostSimulateResponse = z.infer<typeof CostSchema.simulateResponse>;
 export type CostAssociateSubgroup = z.infer<typeof CostSchema.associateSubgroup>;
 export type CostAssociateBatch = z.infer<typeof CostSchema.associateBatch>;
+export type CostAssociateSubgroupBatch = z.input<typeof CostSchema.associateSubgroupBatch>;
+export type CostDeleteSubgroupAssociations = z.infer<typeof CostSchema.deleteSubgroupAssociations>;

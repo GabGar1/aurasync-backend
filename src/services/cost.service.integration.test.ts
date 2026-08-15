@@ -2,6 +2,7 @@ import { describe, it, before, after } from "node:test";
 import assert from "node:assert";
 import { costService } from "./cost.service.js";
 import { productService } from "./product.service.js";
+import { productSubgroupService } from "./product-subgroup.service.js";
 import { cleanupDatabase, closeDatabase } from "../test/setup.js";
 
 describe("CostService Integration Tests", () => {
@@ -105,5 +106,41 @@ describe("CostService Integration Tests", () => {
     assert.strictEqual(deleted, true);
     const components = await costService.listComponents();
     assert.ok(!components.some(c => c.id === componentId));
+  });
+
+  it("associates a subgroup to multiple components in batch (idempotent)", async () => {
+    const sg = await productSubgroupService.createSubgroup({ name: "Anéis (lote)" });
+    const c1 = await costService.createComponent({ name: "Caixa Lote 1", type: "FIXED", value: 1 });
+    const c2 = await costService.createComponent({ name: "Caixa Lote 2", type: "FIXED", value: 2 });
+    const c3 = await costService.createComponent({ name: "Caixa Lote 3", type: "FIXED", value: 3 });
+
+    const result = await costService.associateSubgroupBatch({
+      subgroup_id: sg.id,
+      cost_component_ids: [c1.id, c2.id, c3.id],
+      quantity: 2,
+    });
+    assert.strictEqual(result.associations.length, 3);
+    assert.strictEqual(Number(result.associations[0].quantity), 2);
+
+    const associations = await costService.getAssociationsBySubgroup(sg.id);
+    assert.strictEqual(associations.length, 3);
+
+    // idempotent re-run keeps 3 (upsert)
+    await costService.associateSubgroupBatch({ subgroup_id: sg.id, cost_component_ids: [c1.id, c2.id, c3.id] });
+    const again = await costService.getAssociationsBySubgroup(sg.id);
+    assert.strictEqual(again.length, 3);
+  });
+
+  it("deletes multiple subgroup associations in batch", async () => {
+    const sg = await productSubgroupService.createSubgroup({ name: "Pulseiras (lote)" });
+    const c1 = await costService.createComponent({ name: "Rem 1", type: "FIXED", value: 1 });
+    const c2 = await costService.createComponent({ name: "Rem 2", type: "FIXED", value: 1 });
+
+    await costService.associateSubgroupBatch({ subgroup_id: sg.id, cost_component_ids: [c1.id, c2.id] });
+    assert.strictEqual((await costService.getAssociationsBySubgroup(sg.id)).length, 2);
+
+    const removed = await costService.deleteSubgroupAssociations({ subgroup_id: sg.id, cost_component_ids: [c1.id, c2.id] });
+    assert.strictEqual(removed, true);
+    assert.strictEqual((await costService.getAssociationsBySubgroup(sg.id)).length, 0);
   });
 });

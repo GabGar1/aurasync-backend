@@ -91,6 +91,33 @@ export const costRoutes: FastifyPluginAsyncZod = async (fastify) => {
     }
   });
 
+  fastify.post('/associate-subgroup-batch', {
+    onRequest: [fastify.authenticate],
+    preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])],
+    schema: { body: CostSchema.associateSubgroupBatch },
+  }, async (request, reply) => {
+    try {
+      const result = await costService.associateSubgroupBatch(request.body);
+      return reply.code(201).send(result);
+    } catch (error: any) {
+      return reply.code(400).send({ error: error.message });
+    }
+  });
+
+  fastify.delete('/associate-subgroup-batch', {
+    onRequest: [fastify.authenticate],
+    preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])],
+    schema: { body: CostSchema.deleteSubgroupAssociations },
+  }, async (request, reply) => {
+    try {
+      const removed = await costService.deleteSubgroupAssociations(request.body);
+      if (!removed) return reply.code(404).send({ error: 'No associations found' });
+      return reply.code(204).send();
+    } catch (error: any) {
+      return reply.code(400).send({ error: error.message });
+    }
+  });
+
   fastify.get('/subgroup/:subgroupId', {
     onRequest: [fastify.authenticate],
     preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])],

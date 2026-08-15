@@ -163,6 +163,23 @@ export class CostRepository {
     return result > 0;
   }
 
+  async associateSubgroupBatch(subgroupId: string, componentIds: string[], quantity: number) {
+    const rows = componentIds.map(cid => ({ subgroup_id: subgroupId, cost_component_id: cid, quantity }));
+    return db('subgroup_cost_components')
+      .insert(rows)
+      .onConflict(['subgroup_id', 'cost_component_id'])
+      .merge({ quantity })
+      .returning('*');
+  }
+
+  async hardDeleteSubgroupAssociations(subgroupId: string, componentIds: string[]): Promise<boolean> {
+    const result = await db('subgroup_cost_components')
+      .where({ subgroup_id: subgroupId })
+      .whereIn('cost_component_id', componentIds)
+      .del();
+    return result > 0;
+  }
+
   async listAssociationsBySubgroup(subgroupId: string) {
     const rows = await db('subgroup_cost_components')
       .where('subgroup_cost_components.subgroup_id', subgroupId)

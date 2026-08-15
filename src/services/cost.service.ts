@@ -1,7 +1,7 @@
 import { costRepository } from '../repositories/cost.repository.js';
 import { productRepository } from '../repositories/product.repository.js';
 import { productSubgroupRepository } from '../repositories/product-subgroup.repository.js';
-import { CostSchema, type CostComponentCreate, type CostComponentUpdate, type CostAssociationCreate, type CostAssociateSubgroup, type CostAssociateBatch, type CostSimulateInput } from '../schemas/cost.schema.js';
+import { CostSchema, type CostComponentCreate, type CostComponentUpdate, type CostAssociationCreate, type CostAssociateSubgroup, type CostAssociateBatch, type CostAssociateSubgroupBatch, type CostDeleteSubgroupAssociations, type CostSimulateInput } from '../schemas/cost.schema.js';
 import { computeOrderCosts } from '../lib/cost-engine.js';
 import { db } from '../lib/db.js';
 
@@ -151,6 +151,31 @@ export class CostService {
       results.subgroup.push({ subgroup_id: assoc.subgroup_id });
     }
     return results;
+  }
+
+  async associateSubgroupBatch(data: CostAssociateSubgroupBatch) {
+    const validated = CostSchema.associateSubgroupBatch.parse(data);
+    const subgroup = await productSubgroupRepository.findById(validated.subgroup_id);
+    if (!subgroup) throw new Error('Subgroup not found');
+
+    for (const componentId of validated.cost_component_ids) {
+      const component = await costRepository.findComponentById(componentId);
+      if (!component) throw new Error(`Cost component ${componentId} not found`);
+    }
+
+    const associations = await costRepository.associateSubgroupBatch(
+      validated.subgroup_id,
+      validated.cost_component_ids,
+      validated.quantity
+    );
+    return { subgroup_id: validated.subgroup_id, associations };
+  }
+
+  async deleteSubgroupAssociations(data: CostDeleteSubgroupAssociations) {
+    const validated = CostSchema.deleteSubgroupAssociations.parse(data);
+    const subgroup = await productSubgroupRepository.findById(validated.subgroup_id);
+    if (!subgroup) throw new Error('Subgroup not found');
+    return costRepository.hardDeleteSubgroupAssociations(validated.subgroup_id, validated.cost_component_ids);
   }
 }
 
