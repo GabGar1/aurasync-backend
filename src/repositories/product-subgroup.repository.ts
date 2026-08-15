@@ -41,6 +41,59 @@ export class ProductSubgroupRepository {
       .update({ subgroup_id: subgroupId, updated_at: new Date() });
     return result;
   }
+
+  async unassignProduct(subgroupId: string, productId: string) {
+    const result = await db('products')
+      .where({ id: productId, subgroup_id: subgroupId })
+      .whereNull('deleted_at')
+      .update({ subgroup_id: null, updated_at: new Date() });
+    return result > 0;
+  }
+
+  async listProducts(subgroupId: string, page: number, limit: number, search?: string) {
+    let query = db('products')
+      .where({ subgroup_id: subgroupId })
+      .whereNull('deleted_at');
+
+    if (search) {
+      const term = `%${search}%`;
+      query = query.where((builder: any) => {
+        builder.where('name', 'ilike', term)
+          .orWhere('slug', 'ilike', term)
+          .orWhereExists(function (this: any) {
+            this.select('id')
+              .from('product_variants')
+              .whereRaw('product_variants.product_id = products.id')
+              .whereNull('product_variants.deleted_at')
+              .where((b: any) => {
+                b.where('product_variants.sku', 'ilike', term)
+                  .orWhere('product_variants.name', 'ilike', term);
+              });
+          });
+      });
+    }
+
+    const totalResult = await query.clone().count('* as count').first();
+    const total = Number(totalResult?.count || 0);
+
+    const offset = (page - 1) * limit;
+    const baseProducts = await query
+      .clone()
+      .orderBy('created_at', 'desc')
+      .limit(limit)
+      .offset(offset);
+
+    const products = await Promise.all(
+      baseProducts.map(async (product) => {
+        const variants = await db('product_variants')
+          .where({ product_id: product.id })
+          .whereNull('deleted_at');
+        return { ...product, variants };
+      })
+    );
+
+    return { products, total, page, limit };
+  }
 }
 
 export const productSubgroupRepository = new ProductSubgroupRepository();

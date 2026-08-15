@@ -35,6 +35,18 @@ export class ProductSubgroupService {
     const count = await productSubgroupRepository.assignProducts(subgroupId, v.product_ids);
     return { assigned: count };
   }
+
+  async listProducts(subgroupId: string, page: number, limit: number, search?: string) {
+    const existing = await productSubgroupRepository.findById(subgroupId);
+    if (!existing) throw new Error('Subgroup not found');
+    return productSubgroupRepository.listProducts(subgroupId, page, limit, search);
+  }
+
+  async unassignProduct(subgroupId: string, productId: string) {
+    const existing = await productSubgroupRepository.findById(subgroupId);
+    if (!existing) throw new Error('Subgroup not found');
+    return productSubgroupRepository.unassignProduct(subgroupId, productId);
+  }
 }
 
 export const productSubgroupService = new ProductSubgroupService();

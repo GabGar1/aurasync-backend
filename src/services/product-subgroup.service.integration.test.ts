@@ -33,6 +33,35 @@ describe("ProductSubgroupService Integration Tests", () => {
     assert.strictEqual(r2.subgroup_id, subgroupId);
   });
 
+  it("lists products of a subgroup (paginated)", async () => {
+    const listSg = await productSubgroupService.createSubgroup({ name: "Subgrupo List" });
+    const [p1] = await db('products').insert({ slug: 'sg-list-1', name: 'Anel Solitário' }).returning('*');
+    const [p2] = await db('products').insert({ slug: 'sg-list-2', name: 'Anel Tripla' }).returning('*');
+    await productSubgroupService.assignProductsToSubgroup(listSg.id, [p1.id, p2.id]);
+
+    const all = await productSubgroupService.listProducts(listSg.id, 1, 10);
+    assert.strictEqual(all.total, 2);
+    assert.ok(all.products.some((p: any) => p.id === p1.id));
+
+    const searched = await productSubgroupService.listProducts(listSg.id, 1, 10, 'Tripla');
+    assert.strictEqual(searched.total, 1);
+    assert.strictEqual(searched.products[0].id, p2.id);
+  });
+
+  it("unassigns a product from a subgroup", async () => {
+    const [p1] = await db('products').insert({ slug: 'sg-unassign', name: 'P' }).returning('*');
+    await productSubgroupService.assignProductsToSubgroup(subgroupId, [p1.id]);
+
+    const removed = await productSubgroupService.unassignProduct(subgroupId, p1.id);
+    assert.strictEqual(removed, true);
+
+    const after = await productSubgroupService.listProducts(subgroupId, 1, 10);
+    assert.ok(!after.products.some((p: any) => p.id === p1.id));
+
+    const notRemoved = await productSubgroupService.unassignProduct(subgroupId, p1.id);
+    assert.strictEqual(notRemoved, false);
+  });
+
   it("updates a subgroup", async () => {
     const updated = await productSubgroupService.updateSubgroup(subgroupId, { name: "Anéis e Alianças" });
     assert.strictEqual(updated!.name, "Anéis e Alianças");

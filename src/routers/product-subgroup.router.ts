@@ -62,6 +62,41 @@ export const productSubgroupRoutes: FastifyPluginAsyncZod = async (fastify) => {
     }
   });
 
+  fastify.get('/:id/products', {
+    onRequest: [fastify.authenticate],
+    preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])],
+    schema: {
+      params: z.object({ id: z.string().uuid() }),
+      querystring: z.object({
+        page: z.coerce.number().optional(),
+        limit: z.coerce.number().optional(),
+        search: z.string().optional(),
+      }),
+    },
+  }, async (request, reply) => {
+    try {
+      const { page, limit, search } = request.query;
+      const result = await productSubgroupService.listProducts(request.params.id, page ?? 1, limit ?? 10, search);
+      return reply.send(result);
+    } catch (error: any) {
+      return reply.code(400).send({ error: error.message });
+    }
+  });
+
+  fastify.delete('/:id/products/:productId', {
+    onRequest: [fastify.authenticate],
+    preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])],
+    schema: { params: z.object({ id: z.string().uuid(), productId: z.string().uuid() }) },
+  }, async (request, reply) => {
+    try {
+      const removed = await productSubgroupService.unassignProduct(request.params.id, request.params.productId);
+      if (!removed) return reply.code(404).send({ error: 'Product not in subgroup' });
+      return reply.code(204).send();
+    } catch (error: any) {
+      return reply.code(400).send({ error: error.message });
+    }
+  });
+
   fastify.delete('/:id', {
     onRequest: [fastify.authenticate],
     preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])],
