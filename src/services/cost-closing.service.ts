@@ -40,9 +40,7 @@ export class CostClosingService {
     const agg = await costClosingRepository.aggregateOrders(start, end);
     const allocations = computeMonthlyAllocations(components, agg);
 
-    const componentIds = components.map((c) => c.id);
-    await costClosingRepository.applyAllocations(allocations, componentIds, start, end);
-
+    await costClosingRepository.applyAllocations(allocations, start, end);
     return {
       period: { start, end },
       components: components.map((c) => ({

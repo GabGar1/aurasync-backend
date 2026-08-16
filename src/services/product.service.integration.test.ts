@@ -11,10 +11,12 @@ describe("ProductService Integration Tests", () => {
     "duplicate-slug-test",
     "update-target-slug-test",
     "delete-target-slug-test",
-    "search-variant-product-test"
+    "search-variant-product-test",
+    "search-variant-uuid-product-test"
   ];
 
   let mainProductId: string;
+  let variantInternalId: string;
 
   before(async () => {
     await cleanupDatabase();
@@ -34,6 +36,21 @@ describe("ProductService Integration Tests", () => {
         }
       ]
     });
+
+    const uuidVariantProduct = await productService.createProduct({
+      slug: "search-variant-uuid-product-test",
+      name: "Search Variant UUID Product",
+      is_active: true,
+      variants: [
+        {
+          sku: "UUID-VARIANT-SKU",
+          name: "Variant With UUID",
+          price: 99.90,
+          stock_quantity: 5
+        }
+      ]
+    });
+    variantInternalId = uuidVariantProduct.variants[0]!.id;
   });
 
   after(async () => {
@@ -144,6 +161,12 @@ describe("ProductService Integration Tests", () => {
       const found = result.products.find((p: any) => p.name === "Search Variant Product");
       assert.ok(found);
       assert.ok(found.variants.some((v: any) => v.sku === "MY-VARIANT-SKU"));
+    });
+
+    it("finds products by variant uuid", async () => {
+      const result: any = await productService.getProducts(1, 10, { search: variantInternalId });
+      assert.strictEqual(result.total, 1);
+      assert.strictEqual(result.products[0]!.name, "Search Variant UUID Product");
     });
   });
 

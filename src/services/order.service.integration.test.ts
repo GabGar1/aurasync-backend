@@ -1,5 +1,6 @@
 import { describe, it, after, before } from "node:test";
 import assert from "node:assert";
+import { Client } from "pg";
 import { orderService } from "./order.service.js";
 import { productService } from "./product.service.js";
 import { costService } from "./cost.service.js";
@@ -25,8 +26,8 @@ describe("OrderService Integration Tests", () => {
       slug: "temp-order-test-product",
       name: "Product for Order Tests",
       variants: [
-        { price: 50, stock_quantity: 100 },
-        { price: 150, stock_quantity: 100 }
+        { name: "Order Test Variant 1", price: 50, stock_quantity: 100 },
+        { name: "Order Test Variant 2", price: 150, stock_quantity: 100 }
       ]
     });
 
@@ -97,6 +98,14 @@ describe("OrderService Integration Tests", () => {
       assert.strictEqual(order.id, mainOrderId);
       assert.strictEqual(order.items.length, 2);
       assert.strictEqual(order.items[0]!.status, true, "Items must be active");
+    });
+
+    it("returns product_name and variant_name on order items", async () => {
+      const order = await orderService.getOrderById(mainOrderId);
+
+      assert.ok(order);
+      assert.strictEqual(order.items[0]!.product_name, "Product for Order Tests");
+      assert.ok(order.items[0]!.variant_name != null);
     });
 
     it("should list orders with pagination", async () => {
@@ -499,6 +508,72 @@ describe("OrderService Integration Tests", () => {
       assert.strictEqual(typeof order.total_cost, "number");
       assert.strictEqual(typeof order.margin_percent, "number");
       assert.ok(order.items[0]!.unit_total_cost >= 0);
+    });
+  });
+
+  describe("9. Orphaned Order Items (legacy unmapped variants)", () => {
+    it("keeps order items whose variant no longer exists in fetch and list queries", async () => {
+      const order = await orderService.createOrder({
+        customer_name: "Orphan Items Customer",
+        items: [{ variant_id: testVariantId1, quantity: 1, unit_price: 50 }],
+      });
+
+      const orphanVariantId = "00000000-0000-0000-0000-0000000000ff";
+      // Legacy imports can leave order_items pointing at variants that were
+      // never mapped. The FK constraint rejects such rows, so bypass it on a
+      // dedicated connection with a session-scoped replica role (no persistent
+      // schema changes).
+      const client = new Client({
+        connectionString:
+          process.env.DATABASE_URL_TEST ||
+          "postgresql://admin:admin@127.0.0.1:5433/aurasync_test",
+      });
+      await client.connect();
+      try {
+        await client.query("SET session_replication_role = replica");
+        await client.query(
+          `INSERT INTO order_items (order_id, variant_id, quantity, unit_price, status)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [order.id, orphanVariantId, 1, 10, true]
+        );
+        await client.query("RESET session_replication_role");
+      } finally {
+        await client.end();
+      }
+
+      const fetched = await orderService.getOrderById(order.id);
+      assert.ok(fetched);
+      const orphanItem = fetched.items.find((i) => i.variant_id === orphanVariantId);
+      assert.ok(orphanItem, "orphaned item must survive the fetch items query");
+      assert.strictEqual(orphanItem.product_name, "Produto removido");
+      assert.strictEqual(orphanItem.variant_name, null);
+
+      const listed = await orderService.getOrders(1, 10);
+      const listedOrder = listed.orders.find((o) => o.id === order.id);
+      assert.ok(listedOrder);
+      const listedOrphan = listedOrder.items.find((i) => i.variant_id === orphanVariantId);
+      assert.ok(listedOrphan, "orphaned item must survive the list items query");
+      assert.strictEqual(listedOrphan.product_name, "Produto removido");
+    });
+  });
+
+  describe("10. Monthly Allocations Cost Component Name", () => {
+    it("returns component name on monthly allocations", async () => {
+      const [component] = await db("cost_components")
+        .insert({ name: "Equipe", type: "MONTHLY_FIXED", category: "OPERATIONAL", value: 500 })
+        .returning("*");
+      await db("order_monthly_allocations").insert({
+        order_id: mainOrderId,
+        cost_component_id: component.id,
+        amount: 25.0,
+        period_start: "2026-08-01",
+        period_end: "2026-08-31",
+      });
+      const order = await orderService.getOrderById(mainOrderId);
+      assert.ok(order);
+      const alloc = order.monthly_allocations.find((a: any) => a.cost_component_id === component.id);
+      assert.ok(alloc);
+      assert.strictEqual(alloc.cost_component_name, "Equipe");
     });
   });
 });

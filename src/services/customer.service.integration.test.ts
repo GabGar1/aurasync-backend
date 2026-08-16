@@ -65,4 +65,31 @@ describe("CustomerService Integration Tests", () => {
     assert.ok(Array.isArray(orders));
     assert.ok(orders!.length >= 1);
   });
+
+  it("creates a customer without email", async () => {
+    const created = await customerService.createCustomer({
+      name: "Cliente Sem Email",
+      city: "Campinas",
+    });
+    assert.ok(created.id);
+    assert.strictEqual(created.name, "Cliente Sem Email");
+    assert.strictEqual(created.email, null);
+    assert.strictEqual(created.city, "Campinas");
+  });
+
+  it("upserts a customer by email on creation", async () => {
+    const first = await customerService.createCustomer({
+      name: "Maria Silva",
+      email: "maria@test.com",
+      city: "São Paulo",
+      province: "SP",
+    });
+    const second = await customerService.createCustomer({
+      name: "Maria Silva Atualizada",
+      email: "maria@test.com",
+    });
+    assert.strictEqual(second.id, first.id);
+    assert.strictEqual(second.name, "Maria Silva Atualizada");
+    assert.strictEqual(second.city, "São Paulo");
+  });
 });

@@ -62,18 +62,15 @@ export class CostClosingRepository {
 
   async applyAllocations(
     allocations: Array<{ order_id: string; cost_component_id: string; amount: number }>,
-    componentIds: string[],
     start: string,
     end: string
   ) {
     return await db.transaction(async (trx) => {
-      if (componentIds.length > 0) {
-        await trx('order_monthly_allocations')
-          .whereIn('cost_component_id', componentIds)
-          .where('period_start', start)
-          .where('period_end', end)
-          .del();
-      }
+      await trx('order_monthly_allocations')
+        .where('period_start', start)
+        .where('period_end', end)
+        .where('cost_component_id', '00000000-0000-4000-8000-000000000000')
+        .del();
 
       if (allocations.length > 0) {
         await trx('order_monthly_allocations').insert(

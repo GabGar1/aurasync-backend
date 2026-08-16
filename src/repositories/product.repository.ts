@@ -311,7 +311,8 @@ export class ProductRepository {
               .where((b: any) => {
                 b.where('product_variants.sku', 'ilike', term)
                   .orWhere('product_variants.name', 'ilike', term)
-                  .orWhere('product_variants.nuvemshop_variant_id', 'ilike', term);
+                  .orWhere('product_variants.nuvemshop_variant_id', 'ilike', term)
+                  .orWhere(db.raw('product_variants.id::text'), 'ilike', term);
               });
           });
       });

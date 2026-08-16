@@ -1,7 +1,7 @@
 import { costRepository } from '../repositories/cost.repository.js';
 import { productRepository } from '../repositories/product.repository.js';
 import { productSubgroupRepository } from '../repositories/product-subgroup.repository.js';
-import { CostSchema, type CostComponentCreate, type CostComponentUpdate, type CostAssociationCreate, type CostAssociateSubgroup, type CostAssociateBatch, type CostAssociateSubgroupBatch, type CostDeleteSubgroupAssociations, type CostSimulateInput } from '../schemas/cost.schema.js';
+import { CostSchema, type CostComponentCreate, type CostComponentUpdate, type CostAssociationCreate, type CostAssociateSubgroup, type CostAssociateBatch, type CostAssociateSubgroupBatch, type CostDeleteSubgroupAssociations, type CostSimulateInput, type CostAssociateProductBatch } from '../schemas/cost.schema.js';
 import { computeOrderCosts } from '../lib/cost-engine.js';
 import { db } from '../lib/db.js';
 
@@ -169,6 +169,24 @@ export class CostService {
       validated.quantity
     );
     return { subgroup_id: validated.subgroup_id, associations };
+  }
+
+  async associateProductBatch(data: CostAssociateProductBatch) {
+    const validated = CostSchema.associateProductBatch.parse(data);
+    const product = await productRepository.findById(validated.product_id);
+    if (!product) throw new Error('Product not found');
+
+    for (const componentId of validated.cost_component_ids) {
+      const component = await costRepository.findComponentById(componentId);
+      if (!component) throw new Error(`Cost component ${componentId} not found`);
+    }
+
+    const associations = await costRepository.associateProductBatch(
+      validated.product_id,
+      validated.cost_component_ids,
+      validated.quantity
+    );
+    return { product_id: validated.product_id, associations };
   }
 
   async deleteSubgroupAssociations(data: CostDeleteSubgroupAssociations) {

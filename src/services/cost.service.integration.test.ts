@@ -143,4 +143,61 @@ describe("CostService Integration Tests", () => {
     assert.strictEqual(removed, true);
     assert.strictEqual((await costService.getAssociationsBySubgroup(sg.id)).length, 0);
   });
+
+  it("associates multiple components to one product in batch", async () => {
+    const componentA = await costService.createComponent({ name: "Batch A", type: "FIXED", value: 1 });
+    const componentB = await costService.createComponent({ name: "Batch B", type: "FIXED", value: 1 });
+    const result = await costService.associateProductBatch({
+      product_id: productId,
+      cost_component_ids: [componentA.id, componentB.id],
+      quantity: 2,
+    });
+    assert.strictEqual(result.product_id, productId);
+    assert.strictEqual(result.associations.length, 2);
+  });
+
+  it("associateProductBatch is idempotent (updates quantity)", async () => {
+    const componentA = await costService.createComponent({ name: "Idem A", type: "FIXED", value: 1 });
+    await costService.associateProductBatch({ product_id: productId, cost_component_ids: [componentA.id], quantity: 2 });
+    const again = await costService.associateProductBatch({ product_id: productId, cost_component_ids: [componentA.id], quantity: 3 });
+    assert.strictEqual(again.associations.length, 1);
+    assert.strictEqual(Number(again.associations[0].quantity), 3);
+  });
+
+  it("rejects unknown cost component in batch", async () => {
+    await assert.rejects(
+      costService.associateProductBatch({ product_id: productId, cost_component_ids: ["00000000-0000-4000-8000-0000000000ff"] }),
+      /not found/
+    );
+  });
+
+  it("rejects duplicate cost_component_ids in associateProductBatch", async () => {
+    const dupComponent = await costService.createComponent({ name: "Dup A", type: "FIXED", value: 1 });
+    await assert.rejects(
+      costService.associateProductBatch({ product_id: productId, cost_component_ids: [dupComponent.id, dupComponent.id] }),
+      /must not contain duplicates/
+    );
+  });
+
+  it("does not apply components of a soft-deleted subgroup to costs", async () => {
+    const sg = await productSubgroupService.createSubgroup({ name: "Subgrupo Deletado" });
+    const comp = await costService.createComponent({ name: "Caixa Deletada", type: "FIXED", value: 5 });
+    await costService.associateSubgroupBatch({ subgroup_id: sg.id, cost_component_ids: [comp.id], quantity: 1 });
+
+    const product = await productService.createProduct({
+      slug: "cost-engine-deleted-subgroup",
+      name: "Cost Engine Deleted Subgroup",
+      variants: [{ price: 100, stock_quantity: 10 }],
+    });
+    await productSubgroupService.assignProductsToSubgroup(sg.id, [product.id]);
+    const variantId = product.variants[0]!.id;
+
+    const before = await costService.simulateCosts({ variant_id: variantId, unit_price: 100, quantity: 1 });
+    assert.strictEqual(Number(before!.unit_total_cost), 5);
+
+    await productSubgroupService.deleteSubgroup(sg.id);
+
+    const after = await costService.simulateCosts({ variant_id: variantId, unit_price: 100, quantity: 1 });
+    assert.strictEqual(Number(after!.unit_total_cost), 0);
+  });
 });

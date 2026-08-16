@@ -4,6 +4,8 @@ const OrderItemBaseSchema = z.object({
   id: z.uuid(),
   order_id: z.uuid(),
   variant_id: z.uuid(),
+  product_name: z.string().nullable().optional(),
+  variant_name: z.string().nullable().optional(),
   quantity: z.number().int().positive('Quantity must be greater than zero'),
 
   unit_price: z.number().min(0),
@@ -67,6 +69,7 @@ const OrderResponseShapeSchema = z.object({
     amount: z.number(),
     period_start: z.string(),
     period_end: z.string(),
+    cost_component_name: z.string().nullable().optional(),
   })).optional(),
   status_label: z.string().optional(),
   payment_status_label: z.string().optional(),

@@ -5,6 +5,10 @@ export class CustomerService {
     return customerRepository.upsertFromOrder(data);
   }
 
+  async createCustomer(data: { name: string; email?: string | undefined; city?: string | undefined; province?: string | undefined }) {
+    return customerRepository.create(data);
+  }
+
   async listCustomers(page = 1, limit = 20, filters: { search?: string } = {}) {
     return customerRepository.findAll(page, limit, filters);
   }

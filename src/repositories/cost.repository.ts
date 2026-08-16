@@ -172,6 +172,15 @@ export class CostRepository {
       .returning('*');
   }
 
+  async associateProductBatch(productId: string, componentIds: string[], quantity: number) {
+    const rows = componentIds.map(cid => ({ product_id: productId, cost_component_id: cid, quantity }));
+    return db('product_cost_components')
+      .insert(rows)
+      .onConflict(['product_id', 'cost_component_id'])
+      .merge({ quantity })
+      .returning('*');
+  }
+
   async hardDeleteSubgroupAssociations(subgroupId: string, componentIds: string[]): Promise<boolean> {
     const result = await db('subgroup_cost_components')
       .where({ subgroup_id: subgroupId })

@@ -29,6 +29,26 @@ export const customerRoutes: FastifyPluginAsyncZod = async (fastify) => {
     }
   });
 
+  fastify.post('/', {
+    onRequest: [fastify.authenticate],
+    preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])],
+    schema: {
+      body: z.object({
+        name: z.string().min(1, 'Nome é obrigatório').max(255),
+        email: z.string().email('Email inválido').optional(),
+        city: z.string().max(255).optional(),
+        province: z.string().max(10).optional(),
+      }),
+    },
+  }, async (request, reply) => {
+    try {
+      const customer = await customerService.createCustomer(request.body);
+      return reply.code(201).send(customer);
+    } catch (error: any) {
+      return reply.code(400).send({ error: error.message });
+    }
+  });
+
   fastify.get('/:id', {
     onRequest: [fastify.authenticate],
     preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])],

@@ -69,6 +69,8 @@ export interface OrderItem {
   id: string;
   order_id: string;
   variant_id: string;
+  product_name?: string | null;
+  variant_name?: string | null;
   quantity: number;
   unit_price: number;
   unit_cost: number;
@@ -500,9 +502,22 @@ export class OrderRepository {
     if (!order) return null;
 
     const items = await db(this.itemsTable)
-      .where({ order_id: id, status: true });
+      .leftJoin("product_variants", "product_variants.id", "order_items.variant_id")
+      .leftJoin("products", "products.id", "product_variants.product_id")
+      .where({ "order_items.order_id": id, "order_items.status": true })
+      .select(
+        "order_items.*",
+        db.raw("COALESCE(products.name, 'Produto removido') as product_name"),
+        "product_variants.name as variant_name"
+      );
 
-    const monthly_allocations = await db('order_monthly_allocations').where({ order_id: id });
+    const monthly_allocations = await db('order_monthly_allocations')
+      .leftJoin('cost_components', 'cost_components.id', 'order_monthly_allocations.cost_component_id')
+      .where({ 'order_monthly_allocations.order_id': id })
+      .select(
+        'order_monthly_allocations.*',
+        'cost_components.name as cost_component_name'
+      );
 
     return {
       ...order,
@@ -548,8 +563,21 @@ export class OrderRepository {
     const ordersWithItems = await Promise.all(
       baseOrders.map(async (order) => {
         const items = await db(this.itemsTable)
-          .where({ order_id: order.id, status: true });
-        const monthly_allocations = await db('order_monthly_allocations').where({ order_id: order.id });
+          .leftJoin("product_variants", "product_variants.id", "order_items.variant_id")
+          .leftJoin("products", "products.id", "product_variants.product_id")
+          .where({ "order_items.order_id": order.id, "order_items.status": true })
+          .select(
+            "order_items.*",
+            db.raw("COALESCE(products.name, 'Produto removido') as product_name"),
+            "product_variants.name as variant_name"
+          );
+        const monthly_allocations = await db('order_monthly_allocations')
+          .leftJoin('cost_components', 'cost_components.id', 'order_monthly_allocations.cost_component_id')
+          .where({ 'order_monthly_allocations.order_id': order.id })
+          .select(
+            'order_monthly_allocations.*',
+            'cost_components.name as cost_component_name'
+          );
         return { ...order, items, monthly_allocations };
       })
     );

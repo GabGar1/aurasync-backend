@@ -18,6 +18,43 @@ export interface UpsertCustomerInput {
 export class CustomerRepository {
   private table = 'customers';
 
+  async create(data: { name: string; email?: string | undefined; city?: string | undefined; province?: string | undefined }) {
+    if (!data.email) {
+      const [row] = await db(this.table)
+        .insert({
+          name: data.name,
+          email: null,
+          city: data.city ?? null,
+          province: data.province ?? null,
+          first_purchase_at: null,
+          last_purchase_at: null,
+        })
+        .returning("*");
+      return row;
+    }
+
+    const merge: Record<string, unknown> = {
+      name: data.name,
+      updated_at: new Date(),
+    };
+    if (data.city != null) merge.city = data.city;
+    if (data.province != null) merge.province = data.province;
+
+    const [row] = await db(this.table)
+      .insert({
+        name: data.name,
+        email: data.email,
+        city: data.city ?? null,
+        province: data.province ?? null,
+        first_purchase_at: null,
+        last_purchase_at: null,
+      })
+      .onConflict("email")
+      .merge(merge)
+      .returning("*");
+    return row;
+  }
+
   async upsertFromOrder(data: UpsertCustomerInput) {
     if (!data.email) {
       return null;

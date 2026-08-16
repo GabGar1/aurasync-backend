@@ -51,8 +51,8 @@ export const dashboardRoutes: FastifyPluginAsync = async (app) => {
           end_date?: string;
         };
         const dates = {
-          ...(start_date ? { start: new Date(start_date) } : {}),
-          ...(end_date ? { end: new Date(end_date) } : {}),
+          ...(start_date ? { start_date } : {}),
+          ...(end_date ? { end_date } : {}),
         };
         const data = await dashboardService.getMarketingStats(days, dates);
         return reply.send(DashboardMarketingResponse.parse(data));
@@ -83,8 +83,8 @@ export const dashboardRoutes: FastifyPluginAsync = async (app) => {
           end_date?: string;
         };
         const dates = {
-          ...(start_date ? { start: new Date(start_date) } : {}),
-          ...(end_date ? { end: new Date(end_date) } : {}),
+          ...(start_date ? { start_date } : {}),
+          ...(end_date ? { end_date } : {}),
         };
         const data = await dashboardService.getOrdersStats(days, dates);
         return reply.send(DashboardOrdersResponse.parse(data));

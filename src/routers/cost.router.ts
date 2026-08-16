@@ -118,6 +118,19 @@ export const costRoutes: FastifyPluginAsyncZod = async (fastify) => {
     }
   });
 
+  fastify.post('/associate-product-batch', {
+    onRequest: [fastify.authenticate],
+    preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])],
+    schema: { body: CostSchema.associateProductBatch },
+  }, async (request, reply) => {
+    try {
+      const result = await costService.associateProductBatch(request.body);
+      return reply.code(201).send(result);
+    } catch (error: any) {
+      return reply.code(400).send({ error: error.message });
+    }
+  });
+
   fastify.get('/subgroup/:subgroupId', {
     onRequest: [fastify.authenticate],
     preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])],
