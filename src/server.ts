@@ -1,7 +1,9 @@
 import 'dotenv/config';
+import { assertSecureConfig, isProduction, parseAllowedOrigins, resolveHost, resolveTrustProxy, shouldExposeDocs } from "./lib/config.js";
 import Fastify, {type FastifyReply, type FastifyRequest} from "fastify";
 import {jsonSchemaTransform, serializerCompiler, validatorCompiler} from "fastify-type-provider-zod";
 import { websocketManager } from "./lib/websocket.js";
+import { isAuthenticatedUpgrade } from "./lib/ws-auth.js";
 import { WebSocketServer } from 'ws';
 import fastifyJwt from "@fastify/jwt";
 import {userRoutes} from "./routers/user.router";
@@ -20,6 +22,8 @@ import { costClosingRoutes } from './routers/cost-closing.router.js';
 import {fastifySwagger} from "@fastify/swagger";
 import {fastifySwaggerUi} from "@fastify/swagger-ui";
 import {fastifyCors} from "@fastify/cors";
+import rateLimit from "@fastify/rate-limit";
+import helmet from "@fastify/helmet";
 import fastifyCookie from "@fastify/cookie";
 import {fastifyRawBody} from "fastify-raw-body";
 
@@ -29,11 +33,11 @@ declare module "fastify" {
   }
 }
 
-const app = Fastify({ logger: true });
+assertSecureConfig(process.env);
 
-const allowedOrigins = process.env.NODE_ENV === 'production'
-  ? ['https://lamata.tec.br']
-  : ['http://localhost:5173', 'http://127.0.0.1:5173', 'http://localhost:8080'];
+const app = Fastify({ logger: true, trustProxy: resolveTrustProxy(process.env) });
+
+const allowedOrigins = parseAllowedOrigins(process.env);
 
 app.register(fastifyCors, {
   origin: allowedOrigins,
@@ -45,6 +49,18 @@ app.register(fastifyCors, {
 });
 
 app.register(fastifyCookie);
+
+app.register(rateLimit, {
+  global: true,
+  max: 100,
+  timeWindow: '15 minutes',
+});
+
+app.register(helmet, {
+  contentSecurityPolicy: isProduction(process.env)
+    ? { directives: { defaultSrc: ["'self'"], styleSrc: ["'self'", "'unsafe-inline'"], imgSrc: ["'self'", 'data:'] } }
+    : false,
+});
 
 app.setValidatorCompiler(validatorCompiler);
 app.setSerializerCompiler(serializerCompiler);
@@ -69,29 +85,36 @@ app.decorate("authenticate", async (request: FastifyRequest, reply: FastifyReply
   }
 });
 
-app.register(fastifySwagger, {
-  openapi: {
-    info: {
-      title: 'AuraSync API',
-      description: 'Documentação oficial do E-commerce Backend',
-      version: '1.0.0',
-    },
-    components: {
-      securitySchemes: {
-        bearerAuth: {
-          type: 'http',
-          scheme: 'bearer',
-          bearerFormat: 'JWT',
+app.setErrorHandler((error, request, reply) => {
+  app.log.error({ err: error, url: request.url }, 'Unhandled error');
+  return reply.code(500).send({ error: 'Internal server error' });
+});
+
+if (shouldExposeDocs(process.env)) {
+  app.register(fastifySwagger, {
+    openapi: {
+      info: {
+        title: 'AuraSync API',
+        description: 'Documentação oficial do E-commerce Backend',
+        version: '1.0.0',
+      },
+      components: {
+        securitySchemes: {
+          bearerAuth: {
+            type: 'http',
+            scheme: 'bearer',
+            bearerFormat: 'JWT',
+          },
         },
       },
     },
-  },
-  transform: jsonSchemaTransform,
-});
+    transform: jsonSchemaTransform,
+  });
 
-app.register(fastifySwaggerUi, {
-  routePrefix: '/docs',
-});
+  app.register(fastifySwaggerUi, {
+    routePrefix: '/docs',
+  });
+}
 
 app.register(userRoutes, { prefix: "/api" });
 app.register(productRoutes, { prefix: "/api/products" });
@@ -110,17 +133,34 @@ app.register(costClosingRoutes, { prefix: '/api/cost-closing' });
 const start = async () => {
   try {
     const port = Number(process.env.PORT) || 3333;
-    await app.listen({ port, host: "0.0.0.0" });
+    await app.listen({ port, host: resolveHost(process.env) });
 
-    // Manually create and attach the WebSocket server
-    const wss = new WebSocketServer({ server: app.server });
+    const wss = new WebSocketServer({
+      server: app.server,
+      verifyClient: (info, cb) => {
+        const ok = isAuthenticatedUpgrade(
+          info.req.headers.cookie,
+          (token) => {
+            app.jwt.verify(token);
+            return true;
+          }
+        );
+        if (!ok) {
+          cb(false, 401, 'Unauthorized');
+          return;
+        }
+        cb(true);
+      },
+    });
 
     wss.on('connection', (socket) => {
       websocketManager.add(socket);
     });
 
     console.log(`🚀 WebSocket server is running`);
-    console.log(`📚 Swagger documentation available at http://localhost:${port}/docs`);
+    if (shouldExposeDocs(process.env)) {
+      console.log(`📚 Swagger documentation available at http://localhost:${port}/docs`);
+    }
   } catch (err) {
     app.log.error(err as Error);
     process.exit(1);

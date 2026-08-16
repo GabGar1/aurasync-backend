@@ -11,6 +11,7 @@ describe("UserService Integration Tests", () => {
     "update.test@aurasync.com",
     "delete.test@aurasync.com",
     "searchable.user@aurasync.com",
+    "disabled.login@aurasync.com",
   ];
 
   let mainUserId: string;
@@ -162,5 +163,30 @@ describe("UserService Integration Tests", () => {
       const result = await userService.getUsers(1, 10, { search: "User" });
       assert.ok(result.users.length >= 1);
     });
+  });
+
+  it("rejects login for a disabled user", async () => {
+    const user = await userService.createUser({
+      first_name: "Disabled",
+      last_name: "Login",
+      email: "disabled.login@aurasync.com",
+      password: "DisabledPass123!",
+    });
+    await db("users").where({ id: user.id }).update({ status: false });
+
+    const result = await userService.authenticateUser({
+      email: "disabled.login@aurasync.com",
+      password: "DisabledPass123!",
+    });
+    assert.strictEqual(result, null);
+  });
+
+  it("rejects a short password", async () => {
+    await assert.rejects(
+      userService.createUser({
+        first_name: "Short", last_name: "Pass", email: "short.pass@aurasync.com", password: "1234567",
+      }),
+      /at least 8 characters/
+    );
   });
 });

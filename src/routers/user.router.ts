@@ -5,6 +5,7 @@ import { requireRole } from "../middlewares/role.middleware.js";
 import "@fastify/jwt";
 import { z } from "zod";
 import { csrfProtection } from "../middlewares/csrf.middleware.js";
+import { clampLimit } from "../lib/config.js";
 
 declare module "@fastify/jwt" {
   interface FastifyJWT {
@@ -41,6 +42,7 @@ export const userRoutes: FastifyPluginAsyncZod = async (app) => {
   app.post(
     "/login",
     {
+      config: { rateLimit: { max: 5, timeWindow: '1 minute' } },
       schema: {
         body: UserSchema.login,
       },
@@ -95,7 +97,7 @@ export const userRoutes: FastifyPluginAsyncZod = async (app) => {
         if (role) filters.role = role;
         if (search) filters.search = search;
 
-        const result = await userService.getUsers(page, limit, filters);
+        const result = await userService.getUsers(page, clampLimit(limit, 10), filters);
         return reply.send(result);
       } catch (error: any) {
         return reply.status(400).send({ error: error.message });
@@ -141,6 +143,13 @@ export const userRoutes: FastifyPluginAsyncZod = async (app) => {
     },
     async (request, reply) => {
       try {
+        const target = await userService.getUserById(request.params.id);
+        if (!target) {
+          return reply.status(404).send({ error: "User not found" });
+        }
+        if (target.role === 'SUPER_ADMIN' && request.user.role !== 'SUPER_ADMIN') {
+          return reply.status(403).send({ error: 'Forbidden: cannot modify a SUPER_ADMIN account' });
+        }
         const user = await userService.updateUser(request.params.id, request.body);
         if (!user) {
           return reply.status(404).send({ error: "User not found" });
@@ -190,6 +199,13 @@ export const userRoutes: FastifyPluginAsyncZod = async (app) => {
     },
     async (request, reply) => {
       try {
+        const target = await userService.getUserById(request.params.id);
+        if (!target) {
+          return reply.status(404).send({ error: "User not found" });
+        }
+        if (target.role === 'SUPER_ADMIN' && request.user.role !== 'SUPER_ADMIN') {
+          return reply.status(403).send({ error: 'Forbidden: cannot delete a SUPER_ADMIN account' });
+        }
         const success = await userService.deleteUser(request.params.id);
         if (!success) {
           return reply.status(404).send({ error: "User not found" });

@@ -5,6 +5,7 @@ import {nuvemshopService} from "../services/nuvemshop.service";
 import { ProductSchema } from '../schemas/product.schema.js';
 import { z } from "zod";
 import { csrfProtection } from "../middlewares/csrf.middleware.js";
+import { clampLimit } from "../lib/config.js";
 
 export const productRoutes: FastifyPluginAsyncZod = async (fastify) => {
   fastify.addHook('preHandler', csrfProtection());
@@ -36,6 +37,7 @@ export const productRoutes: FastifyPluginAsyncZod = async (fastify) => {
 
 
   fastify.get('/', {
+    onRequest: [fastify.authenticate],
     schema: {
       querystring: z.object({
         page: z.coerce.number().optional(),
@@ -57,7 +59,7 @@ export const productRoutes: FastifyPluginAsyncZod = async (fastify) => {
 
       const result = await productService.getProducts(
         page ?? 1,
-        limit ?? 10,
+        clampLimit(limit, 10),
         filters
       );
 
@@ -68,6 +70,7 @@ export const productRoutes: FastifyPluginAsyncZod = async (fastify) => {
   });
 
   fastify.get('/:id', {
+    onRequest: [fastify.authenticate],
     schema: { params: z.object({ id: z.string().uuid() }) },
   }, async (request, reply) => {
     try {
@@ -83,6 +86,7 @@ export const productRoutes: FastifyPluginAsyncZod = async (fastify) => {
   });
 
   fastify.get('/slug/:slug', {
+    onRequest: [fastify.authenticate],
     schema: { params: z.object({ slug: z.string().min(1) }) },
   }, async (request, reply) => {
     try {

@@ -4,6 +4,7 @@ import { requireRole } from "../middlewares/role.middleware.js";
 import { InventorySchema } from '../schemas/inventory.schema.js';
 import { z } from "zod";
 import { csrfProtection } from "../middlewares/csrf.middleware.js";
+import { clampLimit } from "../lib/config.js";
 
 export const inventoryRoutes: FastifyPluginAsyncZod = async (fastify) => {
   fastify.addHook('preHandler', csrfProtection());
@@ -36,7 +37,7 @@ export const inventoryRoutes: FastifyPluginAsyncZod = async (fastify) => {
       const { page, limit } = request.query;
       const history = await inventoryService.getGlobalHistory(
         page ?? 1,
-        limit ?? 50
+        clampLimit(limit, 50)
       );
       return reply.send(history);
     } catch (error: any) {
