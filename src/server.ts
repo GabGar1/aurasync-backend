@@ -3,6 +3,7 @@ import { assertSecureConfig, isProduction, parseAllowedOrigins, resolveHost, res
 import Fastify, {type FastifyReply, type FastifyRequest} from "fastify";
 import {jsonSchemaTransform, serializerCompiler, validatorCompiler} from "fastify-type-provider-zod";
 import { websocketManager } from "./lib/websocket.js";
+import { isAuthenticatedUpgrade } from "./lib/ws-auth.js";
 import { WebSocketServer } from 'ws';
 import fastifyJwt from "@fastify/jwt";
 import {userRoutes} from "./routers/user.router";
@@ -129,8 +130,23 @@ const start = async () => {
     const port = Number(process.env.PORT) || 3333;
     await app.listen({ port, host: resolveHost(process.env) });
 
-    // Manually create and attach the WebSocket server
-    const wss = new WebSocketServer({ server: app.server });
+    const wss = new WebSocketServer({
+      server: app.server,
+      verifyClient: (info, cb) => {
+        const ok = isAuthenticatedUpgrade(
+          info.req.headers.cookie,
+          (token) => {
+            app.jwt.verify(token);
+            return true;
+          }
+        );
+        if (!ok) {
+          cb(false, 401, 'Unauthorized');
+          return;
+        }
+        cb(true);
+      },
+    });
 
     wss.on('connection', (socket) => {
       websocketManager.add(socket);
