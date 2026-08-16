@@ -221,3 +221,38 @@ describe("Security: SUPER_ADMIN protection", () => {
     assert.strictEqual(res.statusCode, 403);
   });
 });
+
+describe("Security: webhook body limit", () => {
+  let app: FastifyInstance;
+
+  before(async () => {
+    app = Fastify();
+    app.setValidatorCompiler(validatorCompiler);
+    app.setSerializerCompiler(serializerCompiler);
+    await app.register(fastifyCookie);
+    await app.register(fastifyJwt, { secret: "test-secret" });
+    app.decorate("authenticate", async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        await request.jwtVerify();
+      } catch {
+        reply.status(401).send({ error: "Token ausente ou inválido!" });
+      }
+    });
+    const { webhookRoutes } = await import("./webhook.router.js");
+    await app.register(webhookRoutes, { prefix: "/api/webhooks" });
+  });
+
+  after(async () => {
+    await app.close();
+  });
+
+  it("rejects oversized webhook payloads", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/webhooks/nuvemshop",
+      headers: { "x-webhook-event": "product/created", "content-type": "application/json" },
+      payload: { data: "x".repeat(2 * 1024 * 1024) },
+    });
+    assert.strictEqual(res.statusCode, 413);
+  });
+});

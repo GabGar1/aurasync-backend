@@ -5,7 +5,7 @@ import { orderService } from '../services/order.service.js';
 export const webhookRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post(
     '/nuvemshop',
-    { preHandler: [verifyNuvemshopWebhook] },
+    { preHandler: [verifyNuvemshopWebhook], bodyLimit: 1024 * 1024 },
     async (request, reply) => {
       const event = request.headers['x-webhook-event'] as string;
 

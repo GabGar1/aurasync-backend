@@ -5,6 +5,7 @@ import { requireRole } from "../middlewares/role.middleware.js";
 import "@fastify/jwt";
 import { z } from "zod";
 import { csrfProtection } from "../middlewares/csrf.middleware.js";
+import { clampLimit } from "../lib/config.js";
 
 declare module "@fastify/jwt" {
   interface FastifyJWT {
@@ -96,7 +97,7 @@ export const userRoutes: FastifyPluginAsyncZod = async (app) => {
         if (role) filters.role = role;
         if (search) filters.search = search;
 
-        const result = await userService.getUsers(page, limit, filters);
+        const result = await userService.getUsers(page, clampLimit(limit, 10), filters);
         return reply.send(result);
       } catch (error: any) {
         return reply.status(400).send({ error: error.message });

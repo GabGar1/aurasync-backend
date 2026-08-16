@@ -180,4 +180,13 @@ describe("UserService Integration Tests", () => {
     });
     assert.strictEqual(result, null);
   });
+
+  it("rejects a short password", async () => {
+    await assert.rejects(
+      userService.createUser({
+        first_name: "Short", last_name: "Pass", email: "short.pass@aurasync.com", password: "1234567",
+      }),
+      /at least 8 characters/
+    );
+  });
 });

@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert";
-import { isProduction, assertSecureConfig, parseAllowedOrigins } from "./config.js";
+import { isProduction, assertSecureConfig, parseAllowedOrigins, clampLimit } from "./config.js";
 
 describe("config helpers", () => {
   it("detects production", () => {
@@ -49,5 +49,11 @@ describe("config helpers", () => {
 
   it("falls back to dev origins when unset", () => {
     assert.deepStrictEqual(parseAllowedOrigins({}), ["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:8080"]);
+  });
+
+  it("clamps pagination limits", () => {
+    assert.strictEqual(clampLimit(undefined, 10), 10);
+    assert.strictEqual(clampLimit(999, 10), 100);
+    assert.strictEqual(clampLimit(0, 10), 1);
   });
 });

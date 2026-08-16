@@ -5,6 +5,7 @@ import {nuvemshopService} from "../services/nuvemshop.service";
 import { ProductSchema } from '../schemas/product.schema.js';
 import { z } from "zod";
 import { csrfProtection } from "../middlewares/csrf.middleware.js";
+import { clampLimit } from "../lib/config.js";
 
 export const productRoutes: FastifyPluginAsyncZod = async (fastify) => {
   fastify.addHook('preHandler', csrfProtection());
@@ -58,7 +59,7 @@ export const productRoutes: FastifyPluginAsyncZod = async (fastify) => {
 
       const result = await productService.getProducts(
         page ?? 1,
-        limit ?? 10,
+        clampLimit(limit, 10),
         filters
       );
 
