@@ -28,10 +28,18 @@ export class ProductSubgroupRepository {
   }
 
   async softDelete(id: string) {
-    const result = await db(this.table)
-      .where({ id }).whereNull('deleted_at')
-      .update({ deleted_at: new Date(), is_active: false, updated_at: new Date() });
-    return result > 0;
+    return await db.transaction(async (trx) => {
+      const result = await trx(this.table)
+        .where({ id }).whereNull('deleted_at')
+        .update({ deleted_at: new Date(), is_active: false, updated_at: new Date() });
+      if (result > 0) {
+        await trx('products')
+          .where({ subgroup_id: id })
+          .whereNull('deleted_at')
+          .update({ subgroup_id: null, updated_at: new Date() });
+      }
+      return result > 0;
+    });
   }
 
   async assignProducts(subgroupId: string, productIds: string[]) {
