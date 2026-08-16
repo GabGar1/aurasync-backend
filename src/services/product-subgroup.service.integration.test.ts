@@ -102,6 +102,6 @@ describe("ProductSubgroupService Integration Tests", () => {
     const parsed = ProductSchema.response.parse({ ...found, variants: found.variants });
     assert.strictEqual(parsed.subgroup_id, sg.id);
     const parsedList = ProductSchema.listResponse.parse({ products: [{ ...found, variants: found.variants }], total: 1, page: 1, limit: 10 });
-    assert.strictEqual(parsedList.products[0].subgroup_id, sg.id);
+    assert.strictEqual(parsedList.products[0]!.subgroup_id, sg.id);
   });
 });

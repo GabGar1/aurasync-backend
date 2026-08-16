@@ -167,7 +167,7 @@ describe("CostService Integration Tests", () => {
 
   it("rejects unknown cost component in batch", async () => {
     await assert.rejects(
-      costService.associateProductBatch({ product_id: productId, cost_component_ids: ["00000000-0000-4000-8000-0000000000ff"] }),
+      costService.associateProductBatch({ product_id: productId, cost_component_ids: ["00000000-0000-4000-8000-0000000000ff"], quantity: 1 }),
       /not found/
     );
   });
@@ -175,7 +175,7 @@ describe("CostService Integration Tests", () => {
   it("rejects duplicate cost_component_ids in associateProductBatch", async () => {
     const dupComponent = await costService.createComponent({ name: "Dup A", type: "FIXED", value: 1 });
     await assert.rejects(
-      costService.associateProductBatch({ product_id: productId, cost_component_ids: [dupComponent.id, dupComponent.id] }),
+      costService.associateProductBatch({ product_id: productId, cost_component_ids: [dupComponent.id, dupComponent.id], quantity: 1 }),
       /must not contain duplicates/
     );
   });
