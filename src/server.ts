@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { assertSecureConfig, parseAllowedOrigins, resolveHost, resolveTrustProxy, shouldExposeDocs } from "./lib/config.js";
+import { assertSecureConfig, isProduction, parseAllowedOrigins, resolveHost, resolveTrustProxy, shouldExposeDocs } from "./lib/config.js";
 import Fastify, {type FastifyReply, type FastifyRequest} from "fastify";
 import {jsonSchemaTransform, serializerCompiler, validatorCompiler} from "fastify-type-provider-zod";
 import { websocketManager } from "./lib/websocket.js";
@@ -22,6 +22,7 @@ import {fastifySwagger} from "@fastify/swagger";
 import {fastifySwaggerUi} from "@fastify/swagger-ui";
 import {fastifyCors} from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
+import helmet from "@fastify/helmet";
 import fastifyCookie from "@fastify/cookie";
 import {fastifyRawBody} from "fastify-raw-body";
 
@@ -52,6 +53,12 @@ app.register(rateLimit, {
   global: true,
   max: 100,
   timeWindow: '15 minutes',
+});
+
+app.register(helmet, {
+  contentSecurityPolicy: isProduction(process.env)
+    ? { directives: { defaultSrc: ["'self'"], styleSrc: ["'self'", "'unsafe-inline'"], imgSrc: ["'self'", 'data:'] } }
+    : false,
 });
 
 app.setValidatorCompiler(validatorCompiler);

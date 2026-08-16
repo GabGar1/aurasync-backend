@@ -8,6 +8,7 @@ import type { FastifyRequest, FastifyReply } from "fastify";
 import { productRoutes } from "./product.router.js";
 import { authRoutes } from "./auth.router.js";
 import rateLimit from "@fastify/rate-limit";
+import helmet from "@fastify/helmet";
 import { closeDatabase } from "../test/setup.js";
 
 declare module "@fastify/jwt" {
@@ -102,5 +103,36 @@ describe("Security: login rate limit", () => {
       statuses.push(res.statusCode);
     }
     assert.strictEqual(statuses[5], 429);
+  });
+});
+
+describe("Security: helmet headers", () => {
+  let app: FastifyInstance;
+
+  before(async () => {
+    app = Fastify();
+    app.setValidatorCompiler(validatorCompiler);
+    app.setSerializerCompiler(serializerCompiler);
+    await app.register(fastifyCookie);
+    await app.register(fastifyJwt, { secret: "test-secret" });
+    app.decorate("authenticate", async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        await request.jwtVerify();
+      } catch {
+        reply.status(401).send({ error: "Token ausente ou inválido!" });
+      }
+    });
+    await app.register(helmet, { contentSecurityPolicy: false });
+    await app.register(authRoutes, { prefix: "/api/auth" });
+  });
+
+  after(async () => {
+    await app.close();
+    await closeDatabase();
+  });
+
+  it("emits nosniff on every response", async () => {
+    const res = await app.inject({ method: "POST", url: "/api/auth/login", payload: { email: "x@y.z", password: "p" } });
+    assert.strictEqual(res.headers['x-content-type-options'], 'nosniff');
   });
 });
