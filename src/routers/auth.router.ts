@@ -1,7 +1,7 @@
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { UserSchema } from "../schemas/user.schema.js";
 import { userService } from "../services/user.service.js";
-import { deriveCsrfToken } from "../middlewares/csrf.middleware.js";
+import { deriveCsrfToken, csrfProtection } from "../middlewares/csrf.middleware.js";
 import "@fastify/jwt";
 
 export const authRoutes: FastifyPluginAsyncZod = async (app) => {
@@ -55,7 +55,7 @@ export const authRoutes: FastifyPluginAsyncZod = async (app) => {
     }
   });
 
-  app.post("/logout", async (_request, reply) => {
+  app.post("/logout", { preHandler: [csrfProtection()] }, async (_request, reply) => {
     reply.clearCookie('aurasync_token', { path: '/' });
     return reply.send({ message: "Logged out successfully" });
   });
