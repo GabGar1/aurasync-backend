@@ -3,6 +3,7 @@ import assert from "node:assert";
 import { costService } from "./cost.service.js";
 import { productService } from "./product.service.js";
 import { productSubgroupService } from "./product-subgroup.service.js";
+import { db } from "../lib/db.js";
 import { cleanupDatabase, closeDatabase } from "../test/setup.js";
 
 describe("CostService Integration Tests", () => {
@@ -196,6 +197,27 @@ describe("CostService Integration Tests", () => {
     assert.strictEqual(Number(before!.unit_total_cost), 5);
 
     await productSubgroupService.deleteSubgroup(sg.id);
+
+    const after = await costService.simulateCosts({ variant_id: variantId, unit_price: 100, quantity: 1 });
+    assert.strictEqual(Number(after!.unit_total_cost), 0);
+  });
+
+  it("ignores subgroup cost components when product still points to a soft-deleted subgroup", async () => {
+    const sg = await productSubgroupService.createSubgroup({ name: "Subgrupo Stale" });
+    const comp = await costService.createComponent({ name: "Caixa Stale", type: "FIXED", value: 4 });
+    await costService.associateSubgroupBatch({ subgroup_id: sg.id, cost_component_ids: [comp.id], quantity: 1 });
+
+    const product = await productService.createProduct({
+      slug: "cost-engine-stale-subgroup",
+      name: "Cost Engine Stale Subgroup",
+      variants: [{ price: 100, stock_quantity: 10 }],
+    });
+    await productSubgroupService.assignProductsToSubgroup(sg.id, [product.id]);
+    const variantId = product.variants[0]!.id;
+
+    await productSubgroupService.deleteSubgroup(sg.id);
+    // simulate a legacy record that still references the deleted subgroup
+    await db('products').where({ id: product.id }).update({ subgroup_id: sg.id });
 
     const after = await costService.simulateCosts({ variant_id: variantId, unit_price: 100, quantity: 1 });
     assert.strictEqual(Number(after!.unit_total_cost), 0);

@@ -248,7 +248,9 @@ export class CostRepository {
     return query('subgroup_cost_components')
       .whereIn('subgroup_cost_components.subgroup_id', subgroupIds)
       .join('cost_components', 'cost_components.id', 'subgroup_cost_components.cost_component_id')
+      .join('product_subgroups', 'product_subgroups.id', 'subgroup_cost_components.subgroup_id')
       .whereNull('cost_components.deleted_at')
+      .whereNull('product_subgroups.deleted_at')
       .select(
         'subgroup_cost_components.subgroup_id',
         'subgroup_cost_components.quantity',
