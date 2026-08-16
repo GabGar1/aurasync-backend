@@ -62,6 +62,10 @@ export class UserService {
       return null;
     }
 
+    if (!user.status) {
+      return null;
+    }
+
     return this.sanitizeUser(user);
   }
 
