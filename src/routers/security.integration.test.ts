@@ -6,6 +6,8 @@ import fastifyCookie from "@fastify/cookie";
 import { serializerCompiler, validatorCompiler } from "fastify-type-provider-zod";
 import type { FastifyRequest, FastifyReply } from "fastify";
 import { productRoutes } from "./product.router.js";
+import { authRoutes } from "./auth.router.js";
+import rateLimit from "@fastify/rate-limit";
 import { closeDatabase } from "../test/setup.js";
 
 declare module "@fastify/jwt" {
@@ -61,5 +63,44 @@ describe("Security: product reads require auth", () => {
     assert.strictEqual(res.statusCode, 200);
     const body = res.json();
     assert.ok(Array.isArray(body.products));
+  });
+});
+
+describe("Security: login rate limit", () => {
+  let app: FastifyInstance;
+
+  before(async () => {
+    app = Fastify();
+    app.setValidatorCompiler(validatorCompiler);
+    app.setSerializerCompiler(serializerCompiler);
+    await app.register(fastifyCookie);
+    await app.register(fastifyJwt, { secret: "test-secret" });
+    app.decorate("authenticate", async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        await request.jwtVerify();
+      } catch {
+        reply.status(401).send({ error: "Token ausente ou inválido!" });
+      }
+    });
+    await app.register(rateLimit, { global: false });
+    await app.register(authRoutes, { prefix: "/api/auth" });
+  });
+
+  after(async () => {
+    await app.close();
+    await closeDatabase();
+  });
+
+  it("rejects the 6th login attempt from the same IP", async () => {
+    const statuses: number[] = [];
+    for (let i = 0; i < 6; i++) {
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/auth/login",
+        payload: { email: "nobody@none.test", password: "wrongpass" },
+      });
+      statuses.push(res.statusCode);
+    }
+    assert.strictEqual(statuses[5], 429);
   });
 });

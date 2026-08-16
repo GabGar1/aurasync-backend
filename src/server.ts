@@ -21,6 +21,7 @@ import { costClosingRoutes } from './routers/cost-closing.router.js';
 import {fastifySwagger} from "@fastify/swagger";
 import {fastifySwaggerUi} from "@fastify/swagger-ui";
 import {fastifyCors} from "@fastify/cors";
+import rateLimit from "@fastify/rate-limit";
 import fastifyCookie from "@fastify/cookie";
 import {fastifyRawBody} from "fastify-raw-body";
 
@@ -46,6 +47,12 @@ app.register(fastifyCors, {
 });
 
 app.register(fastifyCookie);
+
+app.register(rateLimit, {
+  global: true,
+  max: 100,
+  timeWindow: '15 minutes',
+});
 
 app.setValidatorCompiler(validatorCompiler);
 app.setSerializerCompiler(serializerCompiler);

@@ -41,6 +41,7 @@ export const userRoutes: FastifyPluginAsyncZod = async (app) => {
   app.post(
     "/login",
     {
+      config: { rateLimit: { max: 5, timeWindow: '1 minute' } },
       schema: {
         body: UserSchema.login,
       },

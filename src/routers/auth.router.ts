@@ -6,7 +6,10 @@ import "@fastify/jwt";
 
 export const authRoutes: FastifyPluginAsyncZod = async (app) => {
 
-  app.post("/login", { schema: { body: UserSchema.login } }, async (request, reply) => {
+  app.post("/login", {
+    config: { rateLimit: { max: 5, timeWindow: '1 minute' } },
+    schema: { body: UserSchema.login }
+  }, async (request, reply) => {
     try {
       const user = await userService.authenticateUser(request.body);
       if (!user) {
