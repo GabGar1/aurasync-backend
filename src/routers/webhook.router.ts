@@ -20,7 +20,7 @@ export const webhookRoutes: FastifyPluginAsync = async (fastify) => {
 
           case 'product/deleted':
             // TODO: Implementar lógica para soft-delete ou desativar produto
-            console.log(`Product deleted event received: ${JSON.stringify(request.body)}`);
+            console.log(`Product deleted event received: ${event}`);
             break;
 
           case 'order/created':
@@ -33,9 +33,9 @@ export const webhookRoutes: FastifyPluginAsync = async (fastify) => {
         }
 
         return reply.code(200).send({ status: 'received', event: event });
-      } catch (error: any) {
-        console.error(`Error processing webhook event ${event}:`, error.response?.data || error.message);
-        return reply.code(500).send({ error: 'Internal server error', details: error.message });
+      } catch (error) {
+        fastify.log.error({ err: error, event }, 'Webhook processing failed');
+        return reply.code(500).send({ error: 'Internal server error' });
       }
     }
   );

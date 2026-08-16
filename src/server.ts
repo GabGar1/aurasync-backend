@@ -85,6 +85,11 @@ app.decorate("authenticate", async (request: FastifyRequest, reply: FastifyReply
   }
 });
 
+app.setErrorHandler((error, request, reply) => {
+  app.log.error({ err: error, url: request.url }, 'Unhandled error');
+  return reply.code(500).send({ error: 'Internal server error' });
+});
+
 if (shouldExposeDocs(process.env)) {
   app.register(fastifySwagger, {
     openapi: {

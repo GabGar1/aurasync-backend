@@ -136,3 +136,42 @@ describe("Security: helmet headers", () => {
     assert.strictEqual(res.headers['x-content-type-options'], 'nosniff');
   });
 });
+
+describe("Security: error leakage", () => {
+  let app: FastifyInstance;
+
+  before(async () => {
+    app = Fastify();
+    app.setValidatorCompiler(validatorCompiler);
+    app.setSerializerCompiler(serializerCompiler);
+    await app.register(fastifyCookie);
+    await app.register(fastifyJwt, { secret: "test-secret" });
+    app.decorate("authenticate", async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        await request.jwtVerify();
+      } catch {
+        reply.status(401).send({ error: "Token ausente ou inválido!" });
+      }
+    });
+    app.setErrorHandler((error, _request, reply) => {
+      app.log.error(error);
+      return reply.status(500).send({ error: 'Internal server error' });
+    });
+    app.get('/boom', async () => {
+      throw new Error('db-password-here');
+    });
+  });
+
+  after(async () => {
+    await app.close();
+    await closeDatabase();
+  });
+
+  it("does not leak raw error messages", async () => {
+    const res = await app.inject({ method: "GET", url: "/boom" });
+    assert.strictEqual(res.statusCode, 500);
+    const body = res.json();
+    assert.strictEqual(body.error, 'Internal server error');
+    assert.ok(!JSON.stringify(body).includes('db-password-here'));
+  });
+});
