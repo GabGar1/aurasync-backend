@@ -69,7 +69,6 @@ export class CostClosingRepository {
       await trx('order_monthly_allocations')
         .where('period_start', start)
         .where('period_end', end)
-        .where('cost_component_id', '00000000-0000-4000-8000-000000000000')
         .del();
 
       if (allocations.length > 0) {
@@ -84,15 +83,24 @@ export class CostClosingRepository {
         );
       }
 
+      const periodOrders = await trx('orders')
+        .whereNull('deleted_at')
+        .where('status', '<>', 'CANCELED')
+        .where('created_at', '>=', start)
+        .andWhere('created_at', '<', end)
+        .select('id');
+
       const perOrder = await trx('order_monthly_allocations')
         .where('period_start', start)
         .where('period_end', end)
         .groupBy('order_id')
         .select('order_id', db.raw('COALESCE(SUM(amount), 0)::float8 as total'));
 
-      for (const row of perOrder as any[]) {
-        await trx('orders').where({ id: row.order_id }).update({
-          monthly_cost_total: Number(row.total),
+      const totalsByOrder = new Map((perOrder as any[]).map((r) => [r.order_id, Number(r.total)]));
+
+      for (const row of periodOrders as any[]) {
+        await trx('orders').where({ id: row.id }).update({
+          monthly_cost_total: totalsByOrder.get(row.id) ?? 0,
           updated_at: new Date(),
         });
       }

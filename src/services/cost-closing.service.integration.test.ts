@@ -1,4 +1,4 @@
-import { describe, it, before, after } from "node:test";
+import { describe, it, before, beforeEach, after } from "node:test";
 import assert from "node:assert";
 import { costClosingService } from "./cost-closing.service.js";
 import { costService } from "./cost.service.js";
@@ -7,6 +7,7 @@ import { cleanupDatabase, closeDatabase } from "../test/setup.js";
 
 describe("CostClosingService Integration Tests", () => {
   before(async () => { await cleanupDatabase(); });
+  beforeEach(async () => { await cleanupDatabase(); });
   after(async () => { await cleanupDatabase(); await closeDatabase(); });
 
   it("closes a month, distributing a MONTHLY_FIXED component across orders", async () => {
