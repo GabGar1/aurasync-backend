@@ -36,6 +36,7 @@ export const productRoutes: FastifyPluginAsyncZod = async (fastify) => {
 
 
   fastify.get('/', {
+    onRequest: [fastify.authenticate],
     schema: {
       querystring: z.object({
         page: z.coerce.number().optional(),
@@ -68,6 +69,7 @@ export const productRoutes: FastifyPluginAsyncZod = async (fastify) => {
   });
 
   fastify.get('/:id', {
+    onRequest: [fastify.authenticate],
     schema: { params: z.object({ id: z.string().uuid() }) },
   }, async (request, reply) => {
     try {
@@ -83,6 +85,7 @@ export const productRoutes: FastifyPluginAsyncZod = async (fastify) => {
   });
 
   fastify.get('/slug/:slug', {
+    onRequest: [fastify.authenticate],
     schema: { params: z.object({ slug: z.string().min(1) }) },
   }, async (request, reply) => {
     try {
