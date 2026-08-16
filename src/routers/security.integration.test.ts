@@ -7,9 +7,15 @@ import { serializerCompiler, validatorCompiler } from "fastify-type-provider-zod
 import type { FastifyRequest, FastifyReply } from "fastify";
 import { productRoutes } from "./product.router.js";
 import { authRoutes } from "./auth.router.js";
+import { userRoutes } from "./user.router.js";
+import { db } from "../lib/db.js";
 import rateLimit from "@fastify/rate-limit";
 import helmet from "@fastify/helmet";
 import { closeDatabase } from "../test/setup.js";
+
+after(async () => {
+  await closeDatabase();
+});
 
 declare module "@fastify/jwt" {
   interface FastifyJWT {
@@ -46,7 +52,6 @@ describe("Security: product reads require auth", () => {
 
   after(async () => {
     await app.close();
-    await closeDatabase();
   });
 
   it("rejects GET / without a token", async () => {
@@ -89,7 +94,6 @@ describe("Security: login rate limit", () => {
 
   after(async () => {
     await app.close();
-    await closeDatabase();
   });
 
   it("rejects the 6th login attempt from the same IP", async () => {
@@ -128,7 +132,6 @@ describe("Security: helmet headers", () => {
 
   after(async () => {
     await app.close();
-    await closeDatabase();
   });
 
   it("emits nosniff on every response", async () => {
@@ -164,7 +167,6 @@ describe("Security: error leakage", () => {
 
   after(async () => {
     await app.close();
-    await closeDatabase();
   });
 
   it("does not leak raw error messages", async () => {
@@ -173,5 +175,49 @@ describe("Security: error leakage", () => {
     const body = res.json();
     assert.strictEqual(body.error, 'Internal server error');
     assert.ok(!JSON.stringify(body).includes('db-password-here'));
+  });
+});
+
+describe("Security: SUPER_ADMIN protection", () => {
+  let app: FastifyInstance;
+  let adminToken: string;
+  let superId: string;
+
+  before(async () => {
+    app = Fastify();
+    app.setValidatorCompiler(validatorCompiler);
+    app.setSerializerCompiler(serializerCompiler);
+    await app.register(fastifyCookie);
+    await app.register(fastifyJwt, { secret: "test-secret" });
+    app.decorate("authenticate", async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        await request.jwtVerify();
+      } catch {
+        reply.status(401).send({ error: "Token ausente ou inválido!" });
+      }
+    });
+    adminToken = app.jwt.sign({ sub: "admin-id", role: "ADMIN", name: "Admin" });
+    await app.register(userRoutes, { prefix: "/api" });
+
+    const { userService } = await import("../services/user.service.js");
+    const sup = await userService.createUser({
+      first_name: "Root", last_name: "Super", email: "protect.super@aurasync.com", password: "Sup3rSecret!123",
+    });
+    superId = sup.id;
+    await db("users").where({ id: superId }).update({ role: "SUPER_ADMIN" });
+  });
+
+  after(async () => {
+    await db("users").where({ id: superId }).del();
+    await app.close();
+  });
+
+  it("blocks ADMIN from deleting a SUPER_ADMIN", async () => {
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/api/users/${superId}`,
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+    assert.strictEqual(res.statusCode, 403);
   });
 });

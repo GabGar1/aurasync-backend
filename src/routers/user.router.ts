@@ -142,6 +142,13 @@ export const userRoutes: FastifyPluginAsyncZod = async (app) => {
     },
     async (request, reply) => {
       try {
+        const target = await userService.getUserById(request.params.id);
+        if (!target) {
+          return reply.status(404).send({ error: "User not found" });
+        }
+        if (target.role === 'SUPER_ADMIN' && request.user.role !== 'SUPER_ADMIN') {
+          return reply.status(403).send({ error: 'Forbidden: cannot modify a SUPER_ADMIN account' });
+        }
         const user = await userService.updateUser(request.params.id, request.body);
         if (!user) {
           return reply.status(404).send({ error: "User not found" });
@@ -191,6 +198,13 @@ export const userRoutes: FastifyPluginAsyncZod = async (app) => {
     },
     async (request, reply) => {
       try {
+        const target = await userService.getUserById(request.params.id);
+        if (!target) {
+          return reply.status(404).send({ error: "User not found" });
+        }
+        if (target.role === 'SUPER_ADMIN' && request.user.role !== 'SUPER_ADMIN') {
+          return reply.status(403).send({ error: 'Forbidden: cannot delete a SUPER_ADMIN account' });
+        }
         const success = await userService.deleteUser(request.params.id);
         if (!success) {
           return reply.status(404).send({ error: "User not found" });
