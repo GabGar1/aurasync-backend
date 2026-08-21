@@ -7,8 +7,20 @@ function localDateToUtc(dateStr: string, endOfDay = false): Date {
   return new Date(`${dateStr}T${time}${STORE_TZ_OFFSET}`);
 }
 
+const NEGATIVE_STATUSES = ["CANCELED", "cancelled"];
+const NEGATIVE_PAYMENT_STATUSES = ["voided", "refunded", "cancelled"];
+const NEGATIVE_FULFILLMENT_STATUSES = ["cancelled", "CANCELED"];
+
 function validOrderFilter(query: any) {
-  return query.whereNull('orders.deleted_at').where('orders.status', '<>', 'CANCELED');
+  return query
+    .whereNull('orders.deleted_at')
+    .whereNotIn('orders.status', NEGATIVE_STATUSES)
+    .where(function (this: any) {
+      this.whereNull('orders.payment_status').orWhereNotIn('orders.payment_status', NEGATIVE_PAYMENT_STATUSES);
+    })
+    .where(function (this: any) {
+      this.whereNull('orders.fulfillment_status').orWhereNotIn('orders.fulfillment_status', NEGATIVE_FULFILLMENT_STATUSES);
+    });
 }
 
 export class DashboardRepository {
@@ -50,12 +62,12 @@ export class DashboardRepository {
       .whereNull("product_variants.deleted_at")
       .whereNull("products.deleted_at")
       .whereNotIn("product_variants.id", function (this: any) {
-        this.select("order_items.variant_id")
-          .from("order_items")
-          .join("orders", "orders.id", "order_items.order_id")
-          .where("orders.created_at", ">=", cutoff)
-          .andWhere("orders.status", "<>", "CANCELED")
-          .whereNull("orders.deleted_at");
+        validOrderFilter(
+          this.select("order_items.variant_id")
+            .from("order_items")
+            .join("orders", "orders.id", "order_items.order_id")
+            .where("orders.created_at", ">=", cutoff)
+        );
       })
       .select(
         "products.id as product_id",
@@ -69,17 +81,16 @@ export class DashboardRepository {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - days);
 
-    const salesSubquery = db("order_items")
-      .join("orders", "orders.id", "order_items.order_id")
-      .where("orders.created_at", ">=", cutoff)
-      .andWhere("orders.status", "<>", "CANCELED")
-      .whereNull("orders.deleted_at")
-      .groupBy("order_items.variant_id")
-      .select(
-        "order_items.variant_id",
-        db.raw("SUM(order_items.quantity)::int as sales_qty")
-      )
-      .as("sales");
+    const salesSubquery = validOrderFilter(
+      db("order_items")
+        .join("orders", "orders.id", "order_items.order_id")
+        .where("orders.created_at", ">=", cutoff)
+        .groupBy("order_items.variant_id")
+        .select(
+          "order_items.variant_id",
+          db.raw("SUM(order_items.quantity)::int as sales_qty")
+        )
+    ).as("sales");
 
     return db("product_variants")
       .join("products", "products.id", "product_variants.product_id")
@@ -126,12 +137,12 @@ export class DashboardRepository {
       .whereNull("product_variants.deleted_at")
       .whereNull("products.deleted_at")
       .whereNotIn("product_variants.id", function (this: any) {
-        this.select("order_items.variant_id")
-          .from("order_items")
-          .join("orders", "orders.id", "order_items.order_id")
-          .where("orders.created_at", ">=", cutoff)
-          .andWhere("orders.status", "<>", "CANCELED")
-          .whereNull("orders.deleted_at");
+        validOrderFilter(
+          this.select("order_items.variant_id")
+            .from("order_items")
+            .join("orders", "orders.id", "order_items.order_id")
+            .where("orders.created_at", ">=", cutoff)
+        );
       })
       .select(
         "products.id as product_id",
@@ -237,16 +248,16 @@ export class DashboardRepository {
       )
       .orderBy("hour");
 
-    const topProducts = await db("order_items")
-      .join("product_variants", "product_variants.id", "order_items.variant_id")
-      .join("products", "products.id", "product_variants.product_id")
-      .join("orders", "orders.id", "order_items.order_id")
-      .where("orders.created_at", ">=", start)
-      .andWhere("orders.created_at", "<=", end)
-      .where("orders.status", "<>", "CANCELED")
-      .whereNull("orders.deleted_at")
-      .whereNull("product_variants.deleted_at")
-      .whereNull("products.deleted_at")
+    const topProducts = await validOrderFilter(
+      db("order_items")
+        .join("product_variants", "product_variants.id", "order_items.variant_id")
+        .join("products", "products.id", "product_variants.product_id")
+        .join("orders", "orders.id", "order_items.order_id")
+        .where("orders.created_at", ">=", start)
+        .andWhere("orders.created_at", "<=", end)
+        .whereNull("product_variants.deleted_at")
+        .whereNull("products.deleted_at")
+    )
       .groupBy("products.id", "products.name", "products.category", "product_variants.name")
       .select(
         "products.id as product_id",
@@ -295,16 +306,15 @@ export class DashboardRepository {
       )
       .first();
 
-    const repeatRow = await db("orders")
-      .where("orders.created_at", ">=", start)
-      .andWhere("orders.created_at", "<=", end)
-      .where("orders.status", "<>", "CANCELED")
-      .whereNull("orders.deleted_at")
-      .whereNotNull("customer_email")
-      .groupBy("customer_email")
-      .havingRaw("COUNT(*) > 1")
-      .select(db.raw("COUNT(*)::int as repeat_customers"))
-      .first();
+    const repeatRow = await validOrderFilter(
+      db("orders")
+        .where("orders.created_at", ">=", start)
+        .andWhere("orders.created_at", "<=", end)
+        .whereNotNull("customer_email")
+        .groupBy("customer_email")
+        .havingRaw("COUNT(*) > 1")
+        .select(db.raw("COUNT(*)::int as repeat_customers"))
+    ).first();
 
     const unique = customerStats?.unique_customers ?? 0;
     const repeat = repeatRow?.repeat_customers ?? 0;

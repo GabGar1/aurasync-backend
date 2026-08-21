@@ -257,4 +257,61 @@ describe("DashboardService Integration Tests", () => {
       "order realized on 2026-07-31 local must NOT count for 2026-08-01"
     );
   });
+
+  it("excludes voided payment orders from revenue metrics", async () => {
+    const before = await dashboardService.getOrdersStats(30);
+    const topBefore = before.top_products.find((p: any) => p.product_id === productId);
+    const deliveredBefore = before.by_status.find((s: any) => s.status === "DELIVERED")?.count ?? 0;
+
+    const voidedOrderId = "00000000-0000-0000-0000-000000000020";
+    await db("orders").insert({
+      id: voidedOrderId,
+      customer_name: "Voided Customer",
+      status: "PENDING",
+      payment_status: "voided",
+      fulfillment_status: "DELIVERED",
+      total_amount: 500,
+      created_at: new Date(),
+    });
+    await db("order_items").insert({
+      order_id: voidedOrderId,
+      variant_id: variantId,
+      quantity: 1,
+      unit_price: 500,
+    });
+
+    const result = await dashboardService.getOrdersStats(30);
+    const delivered = result.by_status.find((s: any) => s.status === "DELIVERED");
+    assert.strictEqual(delivered?.count, deliveredBefore, "voided order must not appear in by_status");
+    const top = result.top_products.find((p: any) => p.product_id === productId);
+    assert.strictEqual(top?.total_sold, topBefore?.total_sold, "voided order must not count in top products");
+
+    const marketing = await dashboardService.getMarketingStats(30);
+    const web = marketing.by_storefront.find((s: any) => s.storefront === "web");
+    assert.strictEqual(web?.revenue, 200, "voided order must not count in revenue");
+
+    await db("order_items").where({ order_id: voidedOrderId }).del();
+    await db("orders").where({ id: voidedOrderId }).del();
+  });
+
+  it("excludes cancelled fulfillment orders from metrics", async () => {
+    const cancelledFulfillmentId = "00000000-0000-0000-0000-000000000021";
+    await db("orders").insert({
+      id: cancelledFulfillmentId,
+      customer_name: "Cancelled Fulfillment",
+      status: "PENDING",
+      payment_status: "paid",
+      fulfillment_status: "cancelled",
+      total_amount: 300,
+      created_at: new Date(),
+    });
+
+    const result = await dashboardService.getOrdersStats(30);
+    const cancelled = result.by_status.find(
+      (s: any) => s.status.toLowerCase() === "cancelled"
+    );
+    assert.strictEqual(cancelled, undefined, "cancelled fulfillment must be excluded");
+
+    await db("orders").where({ id: cancelledFulfillmentId }).del();
+  });
 });
