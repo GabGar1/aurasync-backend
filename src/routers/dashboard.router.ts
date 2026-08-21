@@ -38,8 +38,8 @@ export const dashboardRoutes: FastifyPluginAsync = async (app) => {
       schema: {
         querystring: z.object({
           days: z.coerce.number().default(30),
-          start_date: z.string().optional(),
-          end_date: z.string().optional(),
+          start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+          end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
         }),
       },
     },
@@ -70,8 +70,8 @@ export const dashboardRoutes: FastifyPluginAsync = async (app) => {
       schema: {
         querystring: z.object({
           days: z.coerce.number().default(30),
-          start_date: z.string().optional(),
-          end_date: z.string().optional(),
+          start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+          end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
         }),
       },
     },

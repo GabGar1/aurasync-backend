@@ -25,11 +25,15 @@ function validOrderFilter(query: any) {
 
 export class DashboardRepository {
   private dateWindow(days: number, dates: { start_date?: string; end_date?: string } = {}) {
-    if (dates.start_date && dates.end_date) {
-      return {
-        start: localDateToUtc(dates.start_date),
-        end: localDateToUtc(dates.end_date, true),
-      };
+    if (dates.start_date || dates.end_date) {
+      const startDate = dates.start_date ?? dates.end_date!;
+      const endDate = dates.end_date ?? dates.start_date!;
+      const start = localDateToUtc(startDate);
+      const end = localDateToUtc(endDate, true);
+      if (end < start) {
+        throw new Error("end_date cannot be before start_date");
+      }
+      return { start, end };
     }
     const end = new Date();
     const start = new Date(end.getTime() - days * 24 * 60 * 60 * 1000);

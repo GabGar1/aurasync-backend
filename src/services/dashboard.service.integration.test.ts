@@ -359,4 +359,17 @@ describe("DashboardService Integration Tests", () => {
 
     await db("orders").where({ id: cancelledFulfillmentId }).del();
   });
+
+  it("treats a single explicit start_date as a single day window", async () => {
+    const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const result = await dashboardService.getMarketingStats(30, { start_date: tomorrow });
+    assert.strictEqual(result.by_storefront.length, 0, "only start_date must not fall back to 30-day window");
+  });
+
+  it("rejects end_date before start_date", async () => {
+    await assert.rejects(
+      () => dashboardService.getMarketingStats(30, { start_date: "2026-08-10", end_date: "2026-08-01" }),
+      /end_date/
+    );
+  });
 });
