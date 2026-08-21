@@ -185,15 +185,26 @@ export class DashboardRepository {
       )
       .orderBy("orders", "desc");
 
-    const byCampaign = await baseQuery
+    const campaignSubquery = baseQuery
       .clone()
-      .groupBy("utm_campaign")
       .select(
-        "utm_campaign as campaign",
-        db.raw("COUNT(*)::int as orders"),
-        db.raw("COALESCE(SUM(total_amount), 0)::float8 as revenue"),
-        db.raw("COALESCE(ROUND(AVG(total_amount)::decimal, 2), 0)::float8 as aov")
+        db.raw(`CASE WHEN orders.utm_campaign IS NOT NULL THEN orders.utm_campaign ELSE NULL END as campaign`),
+        db.raw(`CASE WHEN orders.utm_campaign IS NULL THEN orders.utm_source ELSE NULL END as source`),
+        db.raw(`CASE WHEN orders.utm_campaign IS NULL THEN orders.utm_medium ELSE NULL END as medium`),
+        "orders.total_amount as total_amount"
       )
+      .as("campaign_orders");
+
+    const byCampaign = await db(campaignSubquery)
+      .select(
+        "campaign_orders.campaign as campaign",
+        "campaign_orders.source as source",
+        "campaign_orders.medium as medium",
+        db.raw("COUNT(*)::int as orders"),
+        db.raw("COALESCE(SUM(campaign_orders.total_amount), 0)::float8 as revenue"),
+        db.raw("COALESCE(ROUND(AVG(campaign_orders.total_amount)::decimal, 2), 0)::float8 as aov")
+      )
+      .groupBy("campaign_orders.campaign", "campaign_orders.source", "campaign_orders.medium")
       .orderBy("orders", "desc");
 
     const bySource = await baseQuery

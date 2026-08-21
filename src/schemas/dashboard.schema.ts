@@ -60,6 +60,8 @@ export const ProvinceStats = z.object({
 
 export const CampaignStats = z.object({
   campaign: z.string().nullable(),
+  source: z.string().nullable(),
+  medium: z.string().nullable(),
   orders: z.coerce.number().int(),
   revenue: z.coerce.number(),
   aov: z.coerce.number(),

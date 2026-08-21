@@ -294,6 +294,51 @@ describe("DashboardService Integration Tests", () => {
     await db("orders").where({ id: voidedOrderId }).del();
   });
 
+  it("by_campaign groups null utm_campaign orders by source/medium", async () => {
+    const rows = [
+      { id: "00000000-0000-0000-0000-000000000022", utm_campaign: null, utm_source: "ig", utm_medium: "social", total: 50 },
+      { id: "00000000-0000-0000-0000-000000000023", utm_campaign: null, utm_source: "ig", utm_medium: "social", total: 30 },
+      { id: "00000000-0000-0000-0000-000000000024", utm_campaign: null, utm_source: "IGShopping", utm_medium: "Social", total: 20 },
+    ];
+    for (const r of rows) {
+      await db("orders").insert({
+        id: r.id,
+        customer_name: "Campaign Group",
+        status: "PAID",
+        utm_campaign: r.utm_campaign,
+        utm_source: r.utm_source,
+        utm_medium: r.utm_medium,
+        total_amount: r.total,
+        created_at: new Date(),
+      });
+    }
+
+    const marketing = await dashboardService.getMarketingStats(30);
+    const igRow = marketing.by_campaign.find(
+      (c: any) => c.campaign === null && c.source === "ig" && c.medium === "social"
+    );
+    assert.ok(igRow, "ig/social group must exist");
+    assert.strictEqual(igRow.orders, 2);
+    assert.strictEqual(igRow.revenue, 80);
+
+    const igShopRow = marketing.by_campaign.find(
+      (c: any) => c.campaign === null && c.source === "IGShopping" && c.medium === "Social"
+    );
+    assert.ok(igShopRow, "IGShopping/Social group must exist");
+    assert.strictEqual(igShopRow.orders, 1);
+
+    const noUtmRow = marketing.by_campaign.find(
+      (c: any) => c.campaign === null && c.source === null && c.medium === null
+    );
+    assert.ok(noUtmRow, "no-UTM group must exist");
+
+    const summer = marketing.by_campaign.find((c: any) => c.campaign === "summer_sale");
+    assert.ok(summer, "real campaign row must exist");
+    assert.strictEqual(summer.source, null);
+
+    await db("orders").whereIn("id", rows.map((r) => r.id)).del();
+  });
+
   it("excludes cancelled fulfillment orders from metrics", async () => {
     const cancelledFulfillmentId = "00000000-0000-0000-0000-000000000021";
     await db("orders").insert({
