@@ -536,14 +536,17 @@ export class OrderRepository {
   async findAll(
     page: number = 1,
     limit: number = 10,
-    filters: { status?: string; search?: string } = {}
+    filters: { fulfillment_status?: string; search?: string } = {}
   ): Promise<{ orders: OrderWithItems[]; total: number; page: number; limit: number }> {
     let query = db(this.ordersTable)
       .whereNull('deleted_at')
       .orderBy('created_at', 'desc');
 
-    if (filters.status) {
-      query = query.where('status', filters.status);
+    if (filters.fulfillment_status) {
+      query = query.where(
+        db.raw("COALESCE(LOWER(fulfillment_status), 'pending')"),
+        filters.fulfillment_status.toLowerCase()
+      );
     }
 
     if (filters.search) {

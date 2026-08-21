@@ -29,12 +29,12 @@ export const orderRoutes: FastifyPluginAsyncZod = async (fastify) => {
   });
 
 
-  fastify.get('/', { onRequest: [fastify.authenticate], preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])], schema: { querystring: z.object({ page: z.coerce.number().optional(), limit: z.coerce.number().optional(), status: z.string().optional(), search: z.string().optional() }) } }, async (request, reply) => {
+  fastify.get('/', { onRequest: [fastify.authenticate], preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])], schema: { querystring: z.object({ page: z.coerce.number().optional(), limit: z.coerce.number().optional(), fulfillment_status: z.string().optional(), search: z.string().optional() }) } }, async (request, reply) => {
     try {
-      const { page, limit, status, search } = request.query;
+      const { page, limit, fulfillment_status, search } = request.query;
 
-      const filters: { status?: string; search?: string } = {};
-      if (status !== undefined) filters.status = status;
+      const filters: { fulfillment_status?: string; search?: string } = {};
+      if (fulfillment_status !== undefined) filters.fulfillment_status = fulfillment_status;
       if (search !== undefined) filters.search = search;
 
       const result = await orderService.getOrders(

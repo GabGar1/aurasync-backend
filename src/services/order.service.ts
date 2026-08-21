@@ -90,7 +90,7 @@ export class OrderService {
   async getOrders(
     page: number = 1,
     limit: number = 10,
-    filters: { status?: string; search?: string } = {}
+    filters: { fulfillment_status?: string; search?: string } = {}
   ): Promise<{ orders: EnrichedOrder[]; total: number; page: number; limit: number }> {
     const result = await orderRepository.findAll(page, limit, filters);
     return { ...result, orders: result.orders.map(enrichOrder) };

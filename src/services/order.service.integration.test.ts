@@ -576,4 +576,37 @@ describe("OrderService Integration Tests", () => {
       assert.strictEqual(alloc.cost_component_name, "Equipe");
     });
   });
+
+  describe("11. Fulfillment Status Filter", () => {
+    it("lists orders filtered by fulfillment_status (pending matches null)", async () => {
+      const rows = [
+        { id: "00000000-0000-0000-0000-000000000030", fulfillment_status: "DELIVERED", total: 10 },
+        { id: "00000000-0000-0000-0000-000000000031", fulfillment_status: "unpacked", total: 20 },
+        { id: "00000000-0000-0000-0000-000000000032", fulfillment_status: null, total: 30 },
+      ];
+      for (const r of rows) {
+        await db("orders").insert({
+          id: r.id,
+          customer_name: "Fulfillment Filter Customer",
+          status: "PAID",
+          fulfillment_status: r.fulfillment_status,
+          total_amount: r.total,
+        });
+      }
+
+      const delivered = await orderService.getOrders(1, 10, { fulfillment_status: "DELIVERED" });
+      assert.strictEqual(delivered.orders.length, 1);
+      assert.strictEqual(delivered.orders[0]!.id, rows[0]!.id);
+
+      const unpacked = await orderService.getOrders(1, 10, { fulfillment_status: "unpacked" });
+      assert.strictEqual(unpacked.orders.length, 1);
+      assert.strictEqual(unpacked.orders[0]!.id, rows[1]!.id);
+
+      const pending = await orderService.getOrders(1, 10, { fulfillment_status: "pending" });
+      const pendingIds = pending.orders.map((o: any) => o.id);
+      assert.ok(pendingIds.includes(rows[2]!.id), "null fulfillment must match pending");
+
+      await db("orders").whereIn("id", rows.map((r) => r.id)).del();
+    });
+  });
 });
