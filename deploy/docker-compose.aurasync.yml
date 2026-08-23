@@ -1,0 +1,35 @@
+name: aurasync
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: aurasync_db
+    env_file:
+      - .env.aurasync
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - aurasync_pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: aurasync_api
+    env_file:
+      - .env.aurasync
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:3333:3333"
+    restart: unless-stopped
+
+volumes:
+  aurasync_pgdata:

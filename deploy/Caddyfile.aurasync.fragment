@@ -1,0 +1,26 @@
+aurasync.{$DOMAIN} {
+        encode zstd gzip
+        root * /opt/stack/aurasync-frontend/dist
+        try_files {path} /index.html
+        file_server
+
+        header {
+                Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+                X-Content-Type-Options "nosniff"
+                Referrer-Policy "no-referrer"
+        }
+}
+
+aurasync-api.{$DOMAIN} {
+        encode zstd gzip
+        reverse_proxy 127.0.0.1:3333 {
+                header_up X-Real-IP {remote_host}
+                header_up X-Forwarded-For {remote_host}
+        }
+
+        header {
+                Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+                X-Content-Type-Options "nosniff"
+                Referrer-Policy "no-referrer"
+        }
+}
