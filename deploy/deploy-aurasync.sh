@@ -120,8 +120,17 @@ CADDY_INNER_FILE="$(
 )"
 CADDY_INNER_FILE="${CADDY_INNER_FILE:-/etc/caddy/Caddyfile}"
 
-log "Recarregando Caddy ($CADDY_CONTAINER) com config $CADDY_INNER_FILE"
-docker exec "$CADDY_CONTAINER" caddy reload --config "$CADDY_INNER_FILE"
+# IMPORTANTE: recriamos o container em vez de só fazer `caddy reload`.
+# O bind mount do Caddyfile fixa o INODE do arquivo no momento da criação do
+# container; se o arquivo foi substituído (sed -i, cp, git checkout), o Caddy
+# continua lendo a versão antiga ("config is unchanged" no reload).
+if docker inspect "$CADDY_CONTAINER" --format '{{.Mounts}}' | grep -q "$CADDY_HOST_FILE"; then
+  log "Recriando container do Caddy ($CADDY_CONTAINER) para atualizar o bind mount"
+  docker compose -f "$STACK_DIR/docker-compose.yml" up -d --force-recreate caddy
+else
+  log "Recarregando Caddy ($CADDY_CONTAINER) com config $CADDY_INNER_FILE"
+  docker exec "$CADDY_CONTAINER" caddy reload --config "$CADDY_INNER_FILE"
+fi
 
 # ------------------------------------------------------- aviso de mount ---
 if ! docker inspect "$CADDY_CONTAINER" --format '{{json .Mounts}}' | grep -q 'aurasync-frontend/dist'; then
