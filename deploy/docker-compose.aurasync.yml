@@ -16,6 +16,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    networks:
+      - aurasync_net
 
   api:
     build:
@@ -30,6 +32,15 @@ services:
     ports:
       - "127.0.0.1:3333:3333"
     restart: unless-stopped
+    networks:
+      - aurasync_net
+      - stack_net
+
+networks:
+  aurasync_net:
+  stack_net:
+    name: stack_default
+    external: true
 
 volumes:
   aurasync_pgdata:

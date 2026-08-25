@@ -13,7 +13,7 @@ aurasync.{$DOMAIN} {
 
 aurasync-api.{$DOMAIN} {
         encode zstd gzip
-        reverse_proxy 127.0.0.1:3333 {
+        reverse_proxy aurasync_api:3333 {
                 header_up X-Real-IP {remote_host}
                 header_up X-Forwarded-For {remote_host}
         }

@@ -8,7 +8,7 @@ executado por um agente (humano ou IA) diretamente no servidor.
 ```
 gabrielgarbrecht.dev.br            → portfólio (futuro, NÃO é tocado)
 aurasync.gabrielgarbrecht.dev.br   → painel (frontend estático via Caddy)
-aurasync-api.gabrielgarbrecht.dev.br → API (reverse_proxy do Caddy → 127.0.0.1:3333)
+aurasync-api.gabrielgarbrecht.dev.br → API (reverse_proxy do Caddy → aurasync_api:3333)
 
 /opt/stack/
 ├── aurasync-api/          ← este repo (branch develop)
