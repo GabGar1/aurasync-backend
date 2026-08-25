@@ -4,8 +4,10 @@
 > comandos NA VPS, na ordem. Cada etapa diz o que é **esperado** e o que
 > **mudar** se não bater.
 
-Estado atual: script `deploy-aurasync.sh` já rodou (frontend buildou, Caddy
-recarregou). TLS ainda falhando no handshake → este guia resolve.
+Estado atual: DNS propagado, painel no ar (`HTTP/2 200`), API no ar
+(`HTTP/2 401` em `/api/auth/me`). Restam: login do frontend (bug do `baseURL`
+no `api.ts` — ver `docs/prompts/frontend-prod-integration.md`), teste de
+WebSocket e limpeza dos containers antigos.
 
 ---
 
@@ -77,7 +79,11 @@ Depois de editar → reexecutar o script (etapa 5), que preserva o arquivo.
 docker ps | grep aurasync
 ```
 
-**Esperado:** `aurasync_db` (Up) e `aurasync_api` (Up).
+**Esperado:** `aurasync_db` (Up, healthy) e `aurasync_api` (Up).
+
+> ⚠️ Podem aparecer containers ANTIGOS de um deploy de 3 meses:
+> `aurasync_backend` (Restarting em loop) e `aurasync_postgres` (Up). Eles são
+> lixo de um deploy anterior — remover na etapa 15.
 
 **Se API estiver "Restarting"/"Exited":**
 
@@ -90,6 +96,32 @@ docker logs aurasync_api --tail 50
   `.env.aurasync` (etapa 3).
 - `ECONNREFUSED postgres:5432` → Postgres ainda inicializando; esperar e
   reexecutar o script.
+
+---
+
+## 4b. Redes docker (causa do 502 da API)
+
+A API e o Caddy precisam estar **na mesma rede docker**, senão o Caddy dá 502
+mesmo com a API Up. O compose `aurasync` já conecta a API à rede `stack_default`
+(externa, onde o Caddy vive) — confirme:
+
+```bash
+docker inspect aurasync_api --format '{{json .NetworkSettings.Networks}}'
+```
+
+**Esperado:** as redes `aurasync_aurasync_net` (interna, postgres) e
+`stack_default` (onde o Caddy alcança).
+
+**Testar a resolução de dentro do Caddy:**
+
+```bash
+docker exec stack-caddy-1 wget -qO- --timeout=5 http://aurasync_api:3333/api/auth/me
+```
+
+**Esperado:** resposta HTTP 401 (não "bad address" nem timeout). O bloco
+`aurasync-api.{$DOMAIN}` no Caddyfile usa `reverse_proxy aurasync_api:3333`
+(nome do container — NUNCA `127.0.0.1:3333`, que dentro do container do Caddy
+é ele mesmo).
 
 ---
 
@@ -170,7 +202,16 @@ docker compose up -d caddy
 bash /opt/stack/aurasync-api/deploy/deploy-aurasync.sh
 ```
 
-**Esperado:** logs das 7 fases, terminando com "Deploy concluído!".
+**Esperado:** logs das fases, terminando com "Deploy concluído!". O script
+agora **recria o container do Caddy** (`--force-recreate`) em vez de só fazer
+reload.
+
+> ⚠️ **Por quê:** o `sed -i`/edição do Caddyfile no host **troca o inode** do
+> arquivo. O bind mount do Docker fixa o inode da criação do container — se o
+> arquivo foi substituído, `caddy reload` lê a versão velha e loga
+> `"config is unchanged"`. Só recriar o container (`docker compose up -d
+> --force-recreate caddy`) atualiza o mount. Não edite o Caddyfile com `sed -i`
+> depois que o container estiver de pé — prefira o script.
 
 ---
 
@@ -214,7 +255,16 @@ resposta HTTP do Caddy, NUNCA 502 nem timeout de TLS).
 docker logs stack-caddy-1 --tail 40
 ```
 
-**Se der 502** → API fora: `docker logs aurasync_api --tail 50`.
+**Se der 502** → checar o erro real no log do Caddy (ele mostra o endereço
+tentado — ex: `dial tcp 172.17.0.1:3333` = config velha; `bad address
+aurasync_api` = redes separadas):
+
+```bash
+docker logs stack-caddy-1 --tail 40 | grep -A 2 "http.log.error"
+```
+
+- Erro com `host.docker.internal`/`127.0.0.1` → config velha no mount (etapa 9).
+- Erro com `aurasync_api` → redes não compartilhadas (etapa 4b).
 
 **Se der 404 na API** → normal (rota não existe); teste uma real:
 `curl -s https://aurasync-api.gabrielgarbrecht.dev.br/api/auth/me -H "Origin: https://aurasync.gabrielgarbrecht.dev.br" -i | head -10`
@@ -253,15 +303,49 @@ com o `NUVEMSHOP_WEBHOOK_SECRET` do `.env.aurasync`.
 
 ---
 
+## 15. Limpeza de containers antigos (deploy de 3 meses atrás)
+
+A VPS tem resquícios de um deploy anterior:
+- `aurasync_backend` — container Restarting em loop (desperdício de CPU)
+- `aurasync_postgres` — Postgres velho (dados de outro DB, portas 5432 interno)
+- bloco `api.{$DOMAIN}` → `reverse_proxy aurasync_backend:3333` no Caddyfile
+  (aponta pra um container morto)
+
+> ⚠️ Antes de remover, confirme que NINGUÉM usa o `aurasync_postgres` (dados
+> antigos podem existir). Os dados do deploy NOVO ficam no volume
+> `aurasync_pgdata` do compose atual — não são afetados.
+
+```bash
+# 1. Parar e remover o backend velho (Restarting em loop)
+docker rm -f aurasync_backend
+
+# 2. Postgres velho — SÓ se não precisar dos dados antigos
+docker rm -f aurasync_postgres
+
+# 3. Remover o bloco morto do Caddyfile (api.{$DOMAIN} → aurasync_backend)
+#    e recriar o Caddy para o mount pegar o inode novo:
+sed -i '/^api\.{\$DOMAIN} {/,/^}/d' /opt/stack/caddy/Caddyfile
+docker compose up -d --force-recreate caddy
+
+# 4. Conferir o Caddyfile limpo
+grep -n "AURASYNC\|aurasync_backend" /opt/stack/caddy/Caddyfile
+```
+
+**Esperado:** só os marcadores `AURASYNC` aparecem; nenhuma referência a
+`aurasync_backend`; `docker ps | grep aurasync` mostra apenas `aurasync_db` e
+`aurasync_api`.
+
+---
+
 ## Resumo: o que mudar em cada arquivo
 
 | Arquivo | Mudança | Quando |
 |---|---|---|
 | `/opt/stack/aurasync-api/deploy/.env.aurasync` | `NUVEMSHOP_*`, `DB_SEED_EMAIL`, (senha) | 1ª vez (nunca commitado) |
-| `/opt/stack/aurasync-api/deploy/docker-compose.aurasync.yml` | só se porta 5433 ocupada → trocar bind | se necessário |
-| `/opt/stack/docker-compose.yml` | volume `dist` no serviço caddy | 1ª vez (etapa 10) |
+| `/opt/stack/aurasync-api/deploy/docker-compose.aurasync.yml` | API na rede `stack_default` (já está); só se porta 5433 ocupada → trocar bind | se necessário |
+| `/opt/stack/docker-compose.yml` | volume `dist` no serviço caddy; `extra_hosts` NÃO é mais necessário | 1ª vez (etapa 10) |
 | `/opt/stack/docker-compose.yml` | `environment: DOMAIN=...` no caddy | se `{$DOMAIN}` vazio (etapa 8) |
-| `/opt/stack/caddy/Caddyfile` | blocos AURASYNC | automático (script) |
+| `/opt/stack/caddy/Caddyfile` | blocos AURASYNC com `reverse_proxy aurasync_api:3333` | automático (script); NÃO usar `sed -i` no Caddyfile |
 
 **Nunca editar:** `JWT_SECRET`, `CSRF_SECRET`, `POSTGRES_PASSWORD` depois do
 1º run (quebram sessões/boot). Backups do Caddyfile ficam em
