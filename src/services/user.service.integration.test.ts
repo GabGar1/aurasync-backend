@@ -12,6 +12,9 @@ describe("UserService Integration Tests", () => {
     "delete.test@aurasync.com",
     "searchable.user@aurasync.com",
     "disabled.login@aurasync.com",
+    "role.employee@aurasync.com",
+    "role.admin@aurasync.com",
+    "role.edit@aurasync.com",
   ];
 
   let mainUserId: string;
@@ -188,5 +191,60 @@ describe("UserService Integration Tests", () => {
       }),
       /at least 8 characters/
     );
+  });
+
+  // --- ROLE ---
+  describe("7. Role Management", () => {
+    it("creates a user with a custom role when provided", async () => {
+      const user = await userService.createUser({
+        first_name: "Role",
+        last_name: "Admin",
+        email: "role.admin@aurasync.com",
+        password: "RolePass123!",
+        role: "ADMIN",
+      });
+
+      assert.ok(user.id);
+      assert.strictEqual(user.role, "ADMIN");
+    });
+
+    it("defaults role to EMPLOYEE when not provided", async () => {
+      const user = await userService.createUser({
+        first_name: "Role",
+        last_name: "Employee",
+        email: "role.employee@aurasync.com",
+        password: "RolePass123!",
+      });
+
+      assert.ok(user.id);
+      assert.strictEqual(user.role, "EMPLOYEE");
+    });
+
+    it("updates a user role when provided", async () => {
+      const user = await userService.createUser({
+        first_name: "Role",
+        last_name: "Edit",
+        email: "role.edit@aurasync.com",
+        password: "RolePass123!",
+      });
+      assert.strictEqual(user.role, "EMPLOYEE");
+
+      const updated = await userService.updateUser(user.id as string, { role: "SUPER_ADMIN" });
+      assert.ok(updated);
+      assert.strictEqual(updated.role, "SUPER_ADMIN");
+    });
+
+    it("rejects an invalid role value", async () => {
+      await assert.rejects(
+        userService.createUser({
+          first_name: "Role",
+          last_name: "Invalid",
+          email: "role.invalid@aurasync.com",
+          password: "RolePass123!",
+          role: "GOD",
+        }),
+        /Invalid option: expected one of|Invalid enum value/
+      );
+    });
   });
 });

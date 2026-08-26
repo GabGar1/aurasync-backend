@@ -1,5 +1,8 @@
 import { z } from 'zod';
 
+export const USER_ROLES = ['EMPLOYEE', 'ADMIN', 'SUPER_ADMIN'] as const;
+export const UserRoleSchema = z.enum(USER_ROLES);
+
 export const UserSchema = {
   base: z.object({
     id: z.uuid(),
@@ -17,6 +20,7 @@ export const UserSchema = {
     password: z.string().min(8, 'Password must be at least 8 characters'),
     first_name: z.string().min(1, 'First name is required').max(100, 'First name cannot exceed 100 characters'),
     last_name: z.string().min(1, 'Last name is required').max(100, 'Last name cannot exceed 100 characters'),
+    role: UserRoleSchema.optional(),
   }),
 
   login: z.object({
@@ -28,6 +32,7 @@ export const UserSchema = {
     first_name: z.string().min(1, 'First name is required').max(100, 'First name cannot exceed 100 characters').optional(),
     last_name: z.string().min(1, 'Last name is required').max(100, 'Last name cannot exceed 100 characters').optional(),
     status: z.boolean().optional(),
+    role: UserRoleSchema.optional(),
   }),
 
   changePassword: z.object({

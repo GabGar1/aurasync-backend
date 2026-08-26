@@ -31,6 +31,9 @@ export const userRoutes: FastifyPluginAsyncZod = async (app) => {
     },
     async (request, reply) => {
       try {
+        if (request.body.role && request.user.role !== 'SUPER_ADMIN') {
+          return reply.status(403).send({ error: 'Only SUPER_ADMIN can set user roles' });
+        }
         const user = await userService.createUser(request.body);
         return reply.status(201).send(user);
       } catch (error: any) {
@@ -149,6 +152,9 @@ export const userRoutes: FastifyPluginAsyncZod = async (app) => {
         }
         if (target.role === 'SUPER_ADMIN' && request.user.role !== 'SUPER_ADMIN') {
           return reply.status(403).send({ error: 'Forbidden: cannot modify a SUPER_ADMIN account' });
+        }
+        if (request.body.role !== undefined && request.user.role !== 'SUPER_ADMIN') {
+          return reply.status(403).send({ error: 'Only SUPER_ADMIN can change user roles' });
         }
         const user = await userService.updateUser(request.params.id, request.body);
         if (!user) {

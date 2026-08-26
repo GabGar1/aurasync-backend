@@ -13,6 +13,10 @@ const testEmails = [
   "user.auth.test@aurasync.com",
   "new.user@aurasync.com",
   "delete.auth.test@aurasync.com",
+  "role.admin.create@aurasync.com",
+  "role.employee.create@aurasync.com",
+  "role.superadmin.update@aurasync.com",
+  "role.admin.update.target@aurasync.com",
 ];
 
 declare module "@fastify/jwt" {
@@ -43,6 +47,7 @@ describe("User Router Auth", () => {
   let app: FastifyInstance;
   let adminToken: string;
   let employeeToken: string;
+  let superAdminToken: string;
   let testUserId: string;
 
   before(async () => {
@@ -52,6 +57,7 @@ describe("User Router Auth", () => {
 
     adminToken = app.jwt.sign({ sub: "admin-id", role: "ADMIN", name: "Admin" });
     employeeToken = app.jwt.sign({ sub: "emp-id", role: "EMPLOYEE", name: "Employee" });
+    superAdminToken = app.jwt.sign({ sub: "superadmin-id", role: "SUPER_ADMIN", name: "SuperAdmin" });
 
     const { userService } = await import("../services/user.service.js");
     const user = await userService.createUser({
@@ -237,6 +243,115 @@ describe("User Router Auth", () => {
         query: { email: "test@example.com" },
       });
       assert.strictEqual(res.statusCode, 200);
+    });
+  });
+
+  describe("POST /users — role guard", () => {
+    it("should return 403 when ADMIN tries to set role", async () => {
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/users",
+        headers: { authorization: `Bearer ${adminToken}` },
+        body: {
+          first_name: "Role",
+          last_name: "Admin",
+          email: "role.admin.create@aurasync.com",
+          password: "RolePass123!",
+          role: "ADMIN",
+        },
+      });
+      assert.strictEqual(res.statusCode, 403);
+    });
+
+    it("should return 201 with role set by SUPER_ADMIN", async () => {
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/users",
+        headers: { authorization: `Bearer ${superAdminToken}` },
+        body: {
+          first_name: "Role",
+          last_name: "Admin",
+          email: "role.admin.create@aurasync.com",
+          password: "RolePass123!",
+          role: "ADMIN",
+        },
+      });
+      assert.strictEqual(res.statusCode, 201);
+      const body = JSON.parse(res.payload);
+      assert.strictEqual(body.role, "ADMIN");
+    });
+
+    it("should return 201 with default role when SUPER_ADMIN omits role", async () => {
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/users",
+        headers: { authorization: `Bearer ${superAdminToken}` },
+        body: {
+          first_name: "Role",
+          last_name: "Employee",
+          email: "role.employee.create@aurasync.com",
+          password: "RolePass123!",
+        },
+      });
+      assert.strictEqual(res.statusCode, 201);
+      const body = JSON.parse(res.payload);
+      assert.strictEqual(body.role, "EMPLOYEE");
+    });
+  });
+
+  describe("PUT /users/:id — role guard", () => {
+    let adminUpdateTargetId: string;
+
+    before(async () => {
+      const { userService } = await import("../services/user.service.js");
+      const user = await userService.createUser({
+        first_name: "Admin",
+        last_name: "Target",
+        email: "role.admin.update.target@aurasync.com",
+        password: "RolePass123!",
+      });
+      adminUpdateTargetId = user.id as string;
+    });
+
+    it("should return 403 when ADMIN tries to change role", async () => {
+      const res = await app.inject({
+        method: "PUT",
+        url: `/api/users/${adminUpdateTargetId}`,
+        headers: { authorization: `Bearer ${adminToken}` },
+        body: { role: "SUPER_ADMIN" },
+      });
+      assert.strictEqual(res.statusCode, 403);
+    });
+
+    it("should return 200 when SUPER_ADMIN changes role", async () => {
+      const res = await app.inject({
+        method: "PUT",
+        url: `/api/users/${adminUpdateTargetId}`,
+        headers: { authorization: `Bearer ${superAdminToken}` },
+        body: { role: "ADMIN" },
+      });
+      assert.strictEqual(res.statusCode, 200);
+      const body = JSON.parse(res.payload);
+      assert.strictEqual(body.role, "ADMIN");
+    });
+
+    it("should return 403 when ADMIN tries to modify a SUPER_ADMIN user", async () => {
+      const { userService } = await import("../services/user.service.js");
+      const sa = await userService.createUser({
+        first_name: "SA",
+        last_name: "Protected",
+        email: "role.superadmin.update@aurasync.com",
+        password: "RolePass123!",
+        role: "SUPER_ADMIN",
+      });
+
+      const res = await app.inject({
+        method: "PUT",
+        url: `/api/users/${sa.id as string}`,
+        headers: { authorization: `Bearer ${adminToken}` },
+        body: { first_name: "Hacked" },
+      });
+      assert.strictEqual(res.statusCode, 403);
     });
   });
 });

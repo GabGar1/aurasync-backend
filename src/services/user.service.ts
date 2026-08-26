@@ -41,7 +41,7 @@ export class UserService {
       last_name: validatedData.last_name,
       email: validatedData.email,
       password_hash: passwordHash,
-      role: 'EMPLOYEE', // Default role
+      role: validatedData.role || 'EMPLOYEE',
       status: true
     };
 
@@ -90,6 +90,14 @@ export class UserService {
 
     if (validatedData.last_name) {
       updateData.last_name = validatedData.last_name;
+    }
+
+    if (validatedData.role !== undefined) {
+      updateData.role = validatedData.role;
+    }
+
+    if (validatedData.status !== undefined) {
+      updateData.status = validatedData.status;
     }
 
     const updatedUser = await userRepository.update(id, updateData);
