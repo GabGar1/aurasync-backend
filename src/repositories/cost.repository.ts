@@ -1,6 +1,39 @@
 import { db } from '../lib/db.js';
 import type { Knex } from 'knex';
 import type { CostComponent, CostComponentCreate, CostComponentUpdate, CostAssociationCreate, CostAssociateSubgroup } from '../schemas/cost.schema.js';
+import type { CostComponentInput, CostEngineItemInput } from '../lib/cost-engine.js';
+
+export interface CostLineInput {
+  /** Internal product_variants.id */
+  variant_id: string;
+  unit_price: number;
+  quantity: number;
+}
+
+export interface CostEngineItemsResult {
+  /** Engine inputs for the lines whose variant exists, in input order. */
+  items: CostEngineItemInput[];
+  /** Variant ids of the lines that could not be resolved. */
+  missingVariantIds: string[];
+}
+
+const toComponent = (c: any): CostComponentInput => ({
+  id: c.id, name: c.name, type: c.type, category: c.category,
+  value: Number(c.value), calculation_base: c.calculation_base, quantity: c.quantity,
+  max_products_per_package: c.max_products_per_package,
+  consolidates: c.consolidates,
+  applies_to_fair_only: c.applies_to_fair_only,
+});
+
+const groupBy = <T extends Record<string, any>>(rows: T[], key: keyof T) => {
+  const map = new Map<string, T[]>();
+  for (const row of rows) {
+    const k = row[key] as string;
+    if (!map.has(k)) map.set(k, []);
+    map.get(k)!.push(row);
+  }
+  return map;
+};
 
 export interface ComponentWithQuantity {
   id: string;
@@ -125,6 +158,56 @@ export class CostRepository {
         updated_at: r.updated_at,
       },
     }));
+  }
+
+  /**
+   * Resolves variants (product, subgroup, legacy costs) and their cost components
+   * into cost-engine inputs. Shared by local orders, external sales and Nuvemshop orders.
+   */
+  async buildCostEngineItems(
+    lines: CostLineInput[],
+    trx?: Knex.Transaction,
+    options: { activeVariantsOnly?: boolean } = {}
+  ): Promise<CostEngineItemsResult> {
+    const query = trx ?? db;
+    const variantIds = [...new Set(lines.map((l) => l.variant_id))];
+    let variantQuery = query('product_variants')
+      .join('products', 'products.id', 'product_variants.product_id')
+      .whereIn('product_variants.id', variantIds)
+      .select('product_variants.id', 'product_variants.product_id', 'products.subgroup_id', 'product_variants.cost_price', 'product_variants.packaging_cost', 'product_variants.platform_fee_percent');
+    if (options.activeVariantsOnly) variantQuery = variantQuery.whereNull('product_variants.deleted_at');
+    const variants = variantIds.length ? await variantQuery : [];
+
+    const variantMap = new Map(variants.map((v: any) => [v.id, v]));
+    const productIds = [...new Set(variants.map((v: any) => v.product_id as string))];
+    const subgroupIds = [...new Set(variants.map((v: any) => v.subgroup_id as string | null).filter(Boolean))] as string[];
+
+    const componentsByProduct = groupBy(await this.getComponentsByProductIds(productIds, trx), 'product_id');
+    const componentsBySubgroup = groupBy(await this.getComponentsBySubgroupIds(subgroupIds, trx), 'subgroup_id');
+
+    const items: CostEngineItemInput[] = [];
+    const missingVariantIds: string[] = [];
+    for (const line of lines) {
+      const v: any = variantMap.get(line.variant_id);
+      if (!v) {
+        missingVariantIds.push(line.variant_id);
+        continue;
+      }
+      const productComps = (componentsByProduct.get(v.product_id) || []).map(toComponent);
+      const subgroupComps = v.subgroup_id ? (componentsBySubgroup.get(v.subgroup_id) || []).map(toComponent) : [];
+      items.push({
+        variant_id: line.variant_id,
+        product_id: v.product_id,
+        subgroup_id: v.subgroup_id ?? null,
+        unit_price: line.unit_price,
+        quantity: line.quantity,
+        product_cost: Number(v.cost_price || 0),
+        legacy_packaging_cost: Number(v.packaging_cost || 0),
+        legacy_platform_fee_percent: Number(v.platform_fee_percent || 0),
+        components: [...productComps, ...subgroupComps],
+      });
+    }
+    return { items, missingVariantIds };
   }
 
   async getComponentsByProductIds(productIds: string[], trx?: Knex.Transaction): Promise<Array<{ product_id: string; quantity: number } & ComponentWithQuantity>> {

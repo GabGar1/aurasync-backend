@@ -247,11 +247,12 @@ export class ProductRepository {
         const existingVariant = existingVariants.find(v => v.nuvemshop_variant_id === nuvemshop_variant_id);
 
         if (existingVariant) {
-          // Update existing variant
+          // AuraSync owns the stock: Nuvemshop only seeds it when the variant is created.
+          const {stock_quantity: _ignoredStock, ...syncedFields} = variantData;
           const [updatedVariant] = await trx(this.variantsTable)
               .where({id: existingVariant.id})
               .update({
-                ...variantData,
+                ...syncedFields,
                 updated_at: new Date(),
                 deleted_at: null, // Ensure it's not marked as deleted if it reappears
               })
@@ -337,14 +338,18 @@ export class ProductRepository {
         .limit(limit)
         .offset(offset);
 
-    const products = await Promise.all(
-        baseProducts.map(async (product) => {
-          const variants = await db(this.variantsTable)
-              .where({product_id: product.id})
-              .whereNull('deleted_at');
-          return {...product, variants};
-        })
-    );
+    // One query for every variant of the page instead of one per product.
+    const variants = baseProducts.length
+        ? await db(this.variantsTable)
+            .whereIn('product_id', baseProducts.map((p) => p.id))
+            .whereNull('deleted_at')
+        : [];
+    const variantsByProduct = new Map<string, ProductVariant[]>();
+    for (const variant of variants) {
+      if (!variantsByProduct.has(variant.product_id)) variantsByProduct.set(variant.product_id, []);
+      variantsByProduct.get(variant.product_id)!.push(variant);
+    }
+    const products = baseProducts.map((product) => ({...product, variants: variantsByProduct.get(product.id) ?? []}));
 
     return {
       products,

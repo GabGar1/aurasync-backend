@@ -136,20 +136,21 @@ describe("OrderService Integration Tests", () => {
 
   // --- DELETE (CANCELAMENTO) ---
   describe("4. Delete (Cancel) Order", () => {
-    it("should soft delete an order and inactivate its items", async () => {
-      // 1. Cria pedido descartável
+    it("cancels the order instead of hiding it", async () => {
       const tempOrder = await orderService.createOrder({
         customer_name: testCustomerNames[1]!,
         items: [{ variant_id: testVariantId1, quantity: 1, unit_price: 50 }]
       });
 
-      // 2. Deleta/Cancela o pedido
       const deleteResult = await orderService.deleteOrder(tempOrder.id);
       assert.strictEqual(deleteResult, true);
 
-      // 3. Verifica se sumiu (porque o soft delete esconde o registro na busca padrão)
+      // The order stays visible as CANCELED, with its items, for history and reports.
       const checkOrder = await orderService.getOrderById(tempOrder.id);
-      assert.strictEqual(checkOrder, null);
+      assert.ok(checkOrder);
+      assert.strictEqual(checkOrder.status, "CANCELED");
+      assert.ok(checkOrder.cancelled_at);
+      assert.strictEqual(checkOrder.items.length, 1);
     });
   });
 

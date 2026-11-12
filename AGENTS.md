@@ -67,7 +67,10 @@ Router never calls Repository. Service never builds raw Knex queries.
 - **user.schema.ts:49** — `listResponse.id` is typed `z.number()` but DB uses UUID. This is a bug; use `z.string().uuid()` for new schemas.
 - **Dead deps**: `express`, `@types/express`, and `cors` in package.json are unused (Fastify is the framework). Do not add Express code.
 - **`fastify-type-provider-zod`**: used only in `user.router.ts`. Other routers use plain `FastifyPluginAsync`. Either path is acceptable.
-- **Inventory stock update**: `inventory.repository.ts` directly mutates `product_variants.stock_quantity`. This bypasses the service layer for that specific operation — model new stock logic the same way.
+- **Inventory stock update**: `inventory.repository.ts` directly mutates `product_variants.stock_quantity` for manual adjustments.
+- **Stock rule (AuraSync is the source of truth)**: order stock moves only through `stockRepository.reconcileOrderStock(trx, orderId, { strict })`, which applies the difference between what the order should hold (active items, nothing if CANCELED) and the sum of its `inventory_transactions`. Local orders/external sales are strict (400 on insufficient stock); Nuvemshop orders are not (stock may go negative = oversold). Nuvemshop orders created before the `stock_baseline` row of `integration_sync_state` never move stock. The product sync only seeds stock for new variants. Lock variants with `forNoKeyUpdate()` (FOR UPDATE deadlocks against the FK lock taken by inserting order_items).
+- **Cancelling**: `DELETE /orders/:id` cancels (status CANCELED, stock returned, order stays listed). Nuvemshop orders cannot be changed locally (409).
+- **Cost engine inputs**: build them with `costRepository.buildCostEngineItems(lines, trx)`; do not re-implement the variant/component lookup.
 
 ## Git workflow
 

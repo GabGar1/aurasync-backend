@@ -97,6 +97,8 @@ export function enrichOrder(order: Order & { items: OrderItem[] }) {
     monthly_cost_total: Number((order as any).monthly_cost_total || 0),
     total_cost_with_monthly: Number(order.total_cost || 0) + Number((order as any).monthly_cost_total || 0),
     monthly_allocations: (order as any).monthly_allocations ?? [],
+    missing_items: order.missing_items ?? [],
+    cost_incomplete: (order.missing_items ?? []).length > 0,
     items: order.items.map(enrichOrderItem),
   };
 }

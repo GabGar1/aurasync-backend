@@ -54,5 +54,9 @@ describe("OrderService Sync Concurrency (pool deadlock regression)", () => {
       orders.map((o) => o.id)
     );
     assert.strictEqual(persisted.length, CONCURRENCY);
+
+    // Every concurrent order took exactly its own unit of stock (no lost update).
+    const variant = await db("product_variants").where({ nuvemshop_variant_id: variantNuvemId }).first();
+    assert.strictEqual(variant.stock_quantity, 500 - CONCURRENCY);
   });
 });

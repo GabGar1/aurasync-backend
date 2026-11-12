@@ -1,6 +1,6 @@
 import { db } from '../lib/db.js';
 import type { OrderCostResult } from '../lib/cost-engine.js';
-import { BadRequestError, NotFoundError } from '../lib/errors.js';
+import { stockRepository } from './stock.repository.js';
 
 export interface ExternalSaleItemInput {
   variant_id: string;
@@ -79,25 +79,7 @@ export class ExternalSaleRepository {
 
       const insertedItems = await trx(this.itemsTable).insert(itemsToInsert).returning('*');
 
-      for (const item of input.items) {
-        const variant = await trx('product_variants')
-          .where({ id: item.variant_id })
-          .forUpdate()
-          .first();
-        if (!variant) throw new NotFoundError(`Product variant ${item.variant_id} not found`);
-        if (variant.stock_quantity < item.quantity) {
-          throw new BadRequestError(`Insufficient stock for variant ${item.variant_id}. Available: ${variant.stock_quantity}, requested: ${item.quantity}`);
-        }
-        await trx('product_variants')
-          .where({ id: item.variant_id })
-          .update({ stock_quantity: variant.stock_quantity - item.quantity, updated_at: new Date() });
-        await trx('inventory_transactions').insert({
-          variant_id: item.variant_id,
-          order_id: order.id,
-          quantity_changed: -item.quantity,
-          type: 'SALE',
-        });
-      }
+      await stockRepository.reconcileOrderStock(trx, order.id, { strict: true });
 
       return { ...order, items: insertedItems };
     });

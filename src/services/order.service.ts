@@ -65,27 +65,39 @@ export class OrderService {
     if (!existingOrder) {
       throw new NotFoundError('Order not found');
     }
+    this.assertEditableLocally(existingOrder);
 
     const updateData: UpdateOrderInput = {};
 
     if (validatedData.customer_name !== undefined) updateData.customer_name = validatedData.customer_name;
-    if (validatedData.status !== undefined) updateData.status = validatedData.status;
+    if (validatedData.status !== undefined && validatedData.status !== existingOrder.status) {
+      updateData.status = validatedData.status;
+    }
 
     const updated = await orderRepository.update(id, updateData);
     return updated ? enrichOrder(updated) : null;
   }
 
+  /** Cancels the order (it stays listed as CANCELED) and returns its stock. */
   async deleteOrder(id: string): Promise<boolean> {
     const existingOrder = await orderRepository.findById(id);
     if (!existingOrder) {
       throw new NotFoundError('Order not found');
     }
+    this.assertEditableLocally(existingOrder);
 
     if (existingOrder.status === 'CANCELED') {
       throw new ConflictError('Order is already canceled');
     }
 
-    return await orderRepository.delete(id);
+    return await orderRepository.cancel(id);
+  }
+
+  /** Nuvemshop orders are owned by Nuvemshop: a local change would be overwritten by the next sync. */
+  private assertEditableLocally(order: { nuvemshop_order_id: string | null }) {
+    if (order.nuvemshop_order_id) {
+      throw new ConflictError('Nuvemshop orders must be changed on Nuvemshop');
+    }
   }
 
   async getOrders(

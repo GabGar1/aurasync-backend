@@ -3,7 +3,8 @@ import { db } from '../lib/db.js';
 import type { Knex } from 'knex';
 import { costRepository } from './cost.repository.js';
 import { creditFeeRepository } from './credit-fee.repository.js';
-import { computeOrderCosts, type CostEngineItemInput, type ItemCostSnapshot } from '../lib/cost-engine.js';
+import { computeOrderCosts, type ItemCostSnapshot } from '../lib/cost-engine.js';
+import { stockRepository } from './stock.repository.js';
 
 // helper: converts a plain DB item row + computed snapshot into the insert payload
 function applySnapshot(base: Record<string, unknown>, snapshot: ItemCostSnapshot): Record<string, unknown> {
@@ -25,6 +26,12 @@ function applySnapshot(base: Record<string, unknown>, snapshot: ItemCostSnapshot
 }
 
 // --- INTERFACES ---
+
+export interface MissingOrderItem {
+  nuvemshop_variant_id: string;
+  quantity: number;
+  unit_price: number;
+}
 
 export interface Order {
   id: string;
@@ -61,6 +68,8 @@ export interface Order {
   customer_email: string | null;
   is_fair: boolean;
   monthly_cost_total: number;
+  /** Nuvemshop items whose variant does not exist locally (their cost is not in total_cost). */
+  missing_items?: MissingOrderItem[];
   deleted_at?: Date | null;
   created_at: Date;
   updated_at: Date;
@@ -187,52 +196,10 @@ export class OrderRepository {
         })
         .returning('*');
 
-      // after inserting the order and BEFORE stock deduction, resolve variants + components
-      const variantIds = items.map(i => i.variant_id);
-      const variants = await trx('product_variants')
-        .join('products', 'products.id', 'product_variants.product_id')
-        .whereIn('product_variants.id', variantIds)
-        .select('product_variants.id', 'product_variants.product_id', 'products.subgroup_id', 'product_variants.cost_price', 'product_variants.packaging_cost', 'product_variants.platform_fee_percent');
-      const variantMap = new Map(variants.map(v => [v.id, v]));
-      const productIds = [...new Set(variants.map(v => v.product_id))];
-      const subgroupIds = [...new Set(variants.map(v => v.subgroup_id).filter(Boolean))] as string[];
-
-      const toComponent = (c: any) => ({
-        id: c.id, name: c.name, type: c.type, category: c.category,
-        value: Number(c.value), calculation_base: c.calculation_base, quantity: c.quantity,
-        max_products_per_package: c.max_products_per_package,
-        consolidates: c.consolidates,
-        applies_to_fair_only: c.applies_to_fair_only,
-      });
-
-      const componentsByProduct = new Map<string, Array<any>>();
-      for (const row of await costRepository.getComponentsByProductIds(productIds, trx)) {
-        if (!componentsByProduct.has(row.product_id)) componentsByProduct.set(row.product_id, []);
-        componentsByProduct.get(row.product_id)!.push(row);
+      const { items: engineItems, missingVariantIds } = await costRepository.buildCostEngineItems(items, trx);
+      if (missingVariantIds.length > 0) {
+        throw new NotFoundError(`Product variant ${missingVariantIds[0]} not found`);
       }
-      const componentsBySubgroup = new Map<string, Array<any>>();
-      for (const row of await costRepository.getComponentsBySubgroupIds(subgroupIds, trx)) {
-        if (!componentsBySubgroup.has(row.subgroup_id)) componentsBySubgroup.set(row.subgroup_id, []);
-        componentsBySubgroup.get(row.subgroup_id)!.push(row);
-      }
-
-      const engineItems: CostEngineItemInput[] = items.map(item => {
-        const v = variantMap.get(item.variant_id);
-        if (!v) throw new NotFoundError(`Product variant ${item.variant_id} not found`);
-        const productComps = (componentsByProduct.get(v.product_id) || []).map(toComponent);
-        const subgroupComps = v.subgroup_id ? (componentsBySubgroup.get(v.subgroup_id) || []).map(toComponent) : [];
-        return {
-          variant_id: item.variant_id,
-          product_id: v.product_id,
-          subgroup_id: v.subgroup_id ?? null,
-          unit_price: item.unit_price,
-          quantity: item.quantity,
-          product_cost: Number(v.cost_price || 0),
-          legacy_packaging_cost: Number(v.packaging_cost || 0),
-          legacy_platform_fee_percent: Number(v.platform_fee_percent || 0),
-          components: [...productComps, ...subgroupComps],
-        };
-      });
 
       const costResult = computeOrderCosts(engineItems, {
         shipping_cost_owner: 0,
@@ -246,37 +213,7 @@ export class OrderRepository {
         .insert(items.map((item, idx) => applySnapshot({ ...item, order_id: order.id }, costResult.items[idx]!)))
         .returning('*');
 
-      for (const item of items) {
-        const variant = await trx('product_variants')
-          .where({ id: item.variant_id })
-          .forUpdate()
-          .first();
-
-        if (!variant) {
-          throw new NotFoundError(`Product variant ${item.variant_id} not found`);
-        }
-
-        if (variant.stock_quantity < item.quantity) {
-          throw new BadRequestError(
-            `Insufficient stock for variant ${item.variant_id}. Available: ${variant.stock_quantity}, requested: ${item.quantity}`
-          );
-        }
-
-        await trx('product_variants')
-          .where({ id: item.variant_id })
-          .update({
-            stock_quantity: variant.stock_quantity - item.quantity,
-            updated_at: new Date(),
-          });
-
-        await trx('inventory_transactions')
-          .insert({
-            variant_id: item.variant_id,
-            order_id: order.id,
-            quantity_changed: -item.quantity,
-            type: 'SALE',
-          });
-      }
+      await stockRepository.reconcileOrderStock(trx, order.id, { strict: true });
 
       await trx(this.ordersTable)
         .where({ id: order.id })
@@ -369,52 +306,21 @@ export class OrderRepository {
       // 2. Process order items
       const nuvemshopVariantIds = nuvemshopItems.map(item => item.variant_id);
       const internalVariants = await trx('product_variants')
-        .join('products', 'products.id', 'product_variants.product_id')
-        .whereIn('product_variants.nuvemshop_variant_id', nuvemshopVariantIds)
-        .select('product_variants.id', 'product_variants.nuvemshop_variant_id', 'product_variants.product_id', 'products.subgroup_id', 'product_variants.cost_price', 'product_variants.packaging_cost', 'product_variants.platform_fee_percent');
-
+        .whereIn('nuvemshop_variant_id', nuvemshopVariantIds)
+        .select('id', 'nuvemshop_variant_id');
       const variantMap = new Map(internalVariants.map(v => [v.nuvemshop_variant_id, v]));
 
-      const productIds = [...new Set(internalVariants.map(v => v.product_id))];
-      const subgroupIds = [...new Set(internalVariants.map(v => v.subgroup_id).filter(Boolean))] as string[];
+      // Items whose variant is not known locally are kept on the order (cost incomplete)
+      // instead of being dropped silently, which would understate cost and inflate profit.
+      const missingItems = nuvemshopItems
+        .filter(item => !variantMap.has(item.variant_id))
+        .map(item => ({ nuvemshop_variant_id: item.variant_id, quantity: item.quantity, unit_price: item.price }));
+      const matchedItems = nuvemshopItems.filter(item => variantMap.has(item.variant_id));
 
-      const toComponent = (c: any) => ({
-        id: c.id, name: c.name, type: c.type, category: c.category,
-        value: Number(c.value), calculation_base: c.calculation_base, quantity: c.quantity,
-        max_products_per_package: c.max_products_per_package,
-        consolidates: c.consolidates,
-        applies_to_fair_only: c.applies_to_fair_only,
-      });
-
-      const componentsByProduct = new Map<string, Array<any>>();
-      for (const row of await costRepository.getComponentsByProductIds(productIds, trx)) {
-        if (!componentsByProduct.has(row.product_id)) componentsByProduct.set(row.product_id, []);
-        componentsByProduct.get(row.product_id)!.push(row);
-      }
-      const componentsBySubgroup = new Map<string, Array<any>>();
-      for (const row of await costRepository.getComponentsBySubgroupIds(subgroupIds, trx)) {
-        if (!componentsBySubgroup.has(row.subgroup_id)) componentsBySubgroup.set(row.subgroup_id, []);
-        componentsBySubgroup.get(row.subgroup_id)!.push(row);
-      }
-
-      const engineItems: CostEngineItemInput[] = [];
-      for (const nuvemshopItem of nuvemshopItems) {
-        const internalVariant = variantMap.get(nuvemshopItem.variant_id);
-        if (!internalVariant) continue;
-        const productComps = (componentsByProduct.get(internalVariant.product_id) || []).map(toComponent);
-        const subgroupComps = internalVariant.subgroup_id ? (componentsBySubgroup.get(internalVariant.subgroup_id) || []).map(toComponent) : [];
-        engineItems.push({
-          variant_id: internalVariant.id,
-          product_id: internalVariant.product_id,
-          subgroup_id: internalVariant.subgroup_id ?? null,
-          unit_price: nuvemshopItem.price,
-          quantity: nuvemshopItem.quantity,
-          product_cost: Number(internalVariant.cost_price || 0),
-          legacy_packaging_cost: Number(internalVariant.packaging_cost || 0),
-          legacy_platform_fee_percent: Number(internalVariant.platform_fee_percent || 0),
-          components: [...productComps, ...subgroupComps],
-        });
-      }
+      const { items: engineItems } = await costRepository.buildCostEngineItems(
+        matchedItems.map(item => ({ variant_id: variantMap.get(item.variant_id)!.id, unit_price: item.price, quantity: item.quantity })),
+        trx
+      );
 
       const installments = order.payment_installments ?? 1;
       const creditTier = await creditFeeRepository.findByInstallments(installments, trx);
@@ -439,12 +345,8 @@ export class OrderRepository {
 
       const processedItems: OrderItem[] = [];
       let engineIdx = 0;
-      for (const nuvemshopItem of nuvemshopItems) {
-        const internalVariant = variantMap.get(nuvemshopItem.variant_id);
-        if (!internalVariant) {
-          console.warn(`Skipping order item because variant with nuvemshop_variant_id ${nuvemshopItem.variant_id} was not found in the database.`);
-          continue;
-        }
+      for (const nuvemshopItem of matchedItems) {
+        const internalVariant = variantMap.get(nuvemshopItem.variant_id)!;
 
         const snapshot = costResult.items[engineIdx]!;
         engineIdx++;
@@ -485,9 +387,18 @@ export class OrderRepository {
       const netRevenue = Number(order.total_amount) - (order.discount_amount ? Number(order.discount_amount) : 0);
       const total_profit = round2(netRevenue - total_cost);
       const margin_percent = netRevenue > 0 ? round2((total_profit / netRevenue) * 100) : 0;
-      await trx(this.ordersTable).where({ id: order.id }).update({ total_cost, total_profit, margin_percent, updated_at: new Date() });
+      await trx(this.ordersTable).where({ id: order.id }).update({
+        total_cost,
+        total_profit,
+        margin_percent,
+        missing_items: JSON.stringify(missingItems),
+        updated_at: new Date(),
+      });
 
-      return { ...order, total_cost, total_profit, margin_percent, updated_at: new Date(), items: processedItems };
+      // The sale already happened on Nuvemshop: record it even if it exceeds local stock.
+      await stockRepository.reconcileOrderStock(trx, order.id, { strict: false });
+
+      return { ...order, total_cost, total_profit, margin_percent, missing_items: missingItems, updated_at: new Date(), items: processedItems };
     });
   }
 
@@ -502,29 +413,50 @@ export class OrderRepository {
 
     if (!order) return null;
 
+    const [withDetails] = await this.attachDetails([order]);
+    return withDetails ?? null;
+  }
+
+  /** Loads active items and monthly allocations for many orders in two queries (no N+1). */
+  private async attachDetails(orders: Order[]): Promise<OrderWithItems[]> {
+    if (orders.length === 0) return [];
+    const ids = orders.map((o) => o.id);
+
     const items = await db(this.itemsTable)
       .leftJoin("product_variants", "product_variants.id", "order_items.variant_id")
       .leftJoin("products", "products.id", "product_variants.product_id")
-      .where({ "order_items.order_id": id, "order_items.status": true })
+      .whereIn("order_items.order_id", ids)
+      .where("order_items.status", true)
       .select(
         "order_items.*",
         db.raw("COALESCE(products.name, 'Produto removido') as product_name"),
         "product_variants.name as variant_name"
       );
 
-    const monthly_allocations = await db('order_monthly_allocations')
+    const allocations = await db('order_monthly_allocations')
       .leftJoin('cost_components', 'cost_components.id', 'order_monthly_allocations.cost_component_id')
-      .where({ 'order_monthly_allocations.order_id': id })
+      .whereIn('order_monthly_allocations.order_id', ids)
       .select(
         'order_monthly_allocations.*',
         'cost_components.name as cost_component_name'
       );
 
-    return {
-      ...order,
-      items,
-      monthly_allocations,
+    const group = <T extends { order_id: string }>(rows: T[]) => {
+      const map = new Map<string, T[]>();
+      for (const row of rows) {
+        if (!map.has(row.order_id)) map.set(row.order_id, []);
+        map.get(row.order_id)!.push(row);
+      }
+      return map;
     };
+    const itemsByOrder = group(items);
+    const allocationsByOrder = group(allocations);
+
+    return orders.map((order) => ({
+      ...order,
+      items: itemsByOrder.get(order.id) ?? [],
+      monthly_allocations: allocationsByOrder.get(order.id) ?? [],
+    }));
   }
 
   async findByNuvemshopOrderId(nuvemshopOrderId: string): Promise<Order | null> {
@@ -564,27 +496,7 @@ export class OrderRepository {
     const offset = (page - 1) * limit;
     const baseOrders = await query.limit(limit).offset(offset);
 
-    const ordersWithItems = await Promise.all(
-      baseOrders.map(async (order) => {
-        const items = await db(this.itemsTable)
-          .leftJoin("product_variants", "product_variants.id", "order_items.variant_id")
-          .leftJoin("products", "products.id", "product_variants.product_id")
-          .where({ "order_items.order_id": order.id, "order_items.status": true })
-          .select(
-            "order_items.*",
-            db.raw("COALESCE(products.name, 'Produto removido') as product_name"),
-            "product_variants.name as variant_name"
-          );
-        const monthly_allocations = await db('order_monthly_allocations')
-          .leftJoin('cost_components', 'cost_components.id', 'order_monthly_allocations.cost_component_id')
-          .where({ 'order_monthly_allocations.order_id': order.id })
-          .select(
-            'order_monthly_allocations.*',
-            'cost_components.name as cost_component_name'
-          );
-        return { ...order, items, monthly_allocations };
-      })
-    );
+    const ordersWithItems = await this.attachDetails(baseOrders);
 
     return {
       orders: ordersWithItems,
@@ -598,41 +510,44 @@ export class OrderRepository {
    * UPDATE
    */
   async update(id: string, data: UpdateOrderInput): Promise<OrderWithItems | null> {
-    const [updatedOrder] = await db(this.ordersTable)
-      .where({ id })
-      .whereNull('deleted_at')
-      .update({
-        ...data,
-        updated_at: new Date()
-      })
-      .returning('*');
+    const updated = await db.transaction(async (trx) => {
+      const changes: Record<string, unknown> = { ...data, updated_at: new Date() };
+      if (data.status !== undefined) changes.cancelled_at = data.status === 'CANCELED' ? new Date() : null;
 
-    if (!updatedOrder) return null;
+      const [updatedOrder] = await trx(this.ordersTable)
+        .where({ id })
+        .whereNull('deleted_at')
+        .update(changes)
+        .returning('*');
+      if (!updatedOrder) return false;
 
-    return this.findById(id);
+      // Cancelling returns the stock; reopening takes it again (and fails without enough stock).
+      if (data.status !== undefined) {
+        await stockRepository.reconcileOrderStock(trx, id, { strict: true });
+      }
+      return true;
+    });
+
+    return updated ? this.findById(id) : null;
   }
 
   /**
-   * SOFT DELETE
+   * CANCEL: the order stays visible (status CANCELED, items kept for history) and its stock is returned.
    */
-  async delete(id: string): Promise<boolean> {
+  async cancel(id: string): Promise<boolean> {
     return await db.transaction(async (trx) => {
-      await trx(this.itemsTable)
-        .where({ order_id: id })
-        .update({
-          status: false,
-          updated_at: new Date()
-        });
-
       const result = await trx(this.ordersTable)
         .where({ id })
+        .whereNull('deleted_at')
         .update({
-          deleted_at: new Date(),
+          status: 'CANCELED',
+          cancelled_at: new Date(),
           updated_at: new Date(),
-          status: 'CANCELED'
         });
+      if (result === 0) return false;
 
-      return result > 0;
+      await stockRepository.reconcileOrderStock(trx, id, { strict: false });
+      return true;
     });
   }
 }
