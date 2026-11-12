@@ -1,49 +1,33 @@
-import type { FastifyRequest, FastifyReply, DoneFuncWithErrOrRes } from 'fastify';
+import type { FastifyRequest, FastifyReply } from 'fastify';
 import crypto from 'crypto';
 
-export const verifyNuvemshopWebhook = (req: FastifyRequest, reply: FastifyReply, done: DoneFuncWithErrOrRes) => {
-  const nuvemshopSignature = req.headers['x-webhook-signature'] as string;
+/**
+ * Nuvemshop signs every webhook with HMAC-SHA256 of the raw body using the app
+ * secret, hex-encoded, in the `x-linkedstore-hmac-sha256` header.
+ */
+export const verifyNuvemshopWebhook = async (req: FastifyRequest, reply: FastifyReply) => {
   const secret = process.env.NUVEMSHOP_WEBHOOK_SECRET;
-
   if (!secret) {
-    console.error('NUVEMSHOP_WEBHOOK_SECRET não está configurado no ambiente.');
-    reply.status(500).send({ error: 'Webhook secret not configured on server.' });
-    return;
+    req.log.error('NUVEMSHOP_WEBHOOK_SECRET is not configured');
+    return reply.status(500).send({ error: 'Internal server error' });
   }
 
-  if (!nuvemshopSignature) {
-    console.warn('Requisição sem o cabeçalho x-webhook-signature.');
-    reply.status(401).send({ error: 'Missing webhook signature.' });
-    return;
+  const signature = req.headers['x-linkedstore-hmac-sha256'];
+  if (typeof signature !== 'string' || signature.length === 0) {
+    return reply.status(401).send({ error: 'Missing webhook signature.' });
   }
 
-  const payload = (req as any).rawBody;
-
-  if (!payload) {
-    console.error('Raw body não disponível na requisição. Certifique-se de que um plugin de raw body está registrado.');
-    reply.status(500).send({ error: 'Internal server error: Raw body not available.' });
-    return;
+  const payload = (req as FastifyRequest & { rawBody?: string | Buffer }).rawBody;
+  if (payload === undefined) {
+    req.log.error('Raw body not available for the Nuvemshop webhook route');
+    return reply.status(500).send({ error: 'Internal server error' });
   }
 
-  const eqIndex = nuvemshopSignature.indexOf('=');
-  const algorithm = nuvemshopSignature.slice(0, eqIndex);
-  const signatureHash = nuvemshopSignature.slice(eqIndex + 1);
+  const expected = Buffer.from(crypto.createHmac('sha256', secret).update(payload).digest('hex'));
+  const received = Buffer.from(signature.trim().toLowerCase());
 
-  if (algorithm !== 'sha256') {
-    console.warn('Algoritmo de assinatura de webhook inválido. Esperado sha256.');
-    reply.status(401).send({ error: 'Invalid webhook signature algorithm.' });
-    return;
+  if (received.length !== expected.length || !crypto.timingSafeEqual(received, expected)) {
+    req.log.warn('Invalid Nuvemshop webhook signature');
+    return reply.status(401).send({ error: 'Invalid webhook signature.' });
   }
-
-  const hmac = crypto.createHmac('sha256', secret);
-  hmac.update(payload);
-  const expectedSignature = hmac.digest('hex');
-
-  if (signatureHash.length !== expectedSignature.length || !crypto.timingSafeEqual(Buffer.from(signatureHash), Buffer.from(expectedSignature))) {
-    console.warn('Assinatura de webhook inválida recebida.');
-    reply.status(401).send({ error: 'Invalid webhook signature.' });
-    return;
-  }
-
-  done();
 };

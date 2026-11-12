@@ -6,6 +6,7 @@ import { OrderSchema } from '../schemas/order.schema.js';
 import { z } from "zod";
 import { csrfProtection } from "../middlewares/csrf.middleware.js";
 import { clampLimit, clampPage } from "../lib/config.js";
+import { ConflictError } from "../lib/errors.js";
 
 export const orderRoutes: FastifyPluginAsyncZod = async (fastify) => {
   fastify.addHook('preHandler', csrfProtection());
@@ -15,14 +16,16 @@ export const orderRoutes: FastifyPluginAsyncZod = async (fastify) => {
     return reply.code(201).send(order);
   });
 
-  fastify.post('/sync/nuvemshop', { onRequest: [fastify.authenticate], preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])] }, (request, reply) => {
-    // Don't await this. This lets the request finish immediately.
-    nuvemshopService.syncOrders().catch(error => {
-      console.error("Error during background sync:", error);
+  fastify.post('/sync/nuvemshop', { onRequest: [fastify.authenticate], preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])], schema: { querystring: z.object({ full: z.enum(['true', 'false']).optional() }) } }, async (request, reply) => {
+    if (nuvemshopService.isSyncing('orders')) {
+      throw new ConflictError('Synchronization already in progress');
+    }
+    // Runs in the background (orders sync can take minutes); the result reaches the UI over the websocket.
+    nuvemshopService.syncOrders({ full: request.query.full === 'true' }).catch((error) => {
+      request.log.error({ err: error }, 'Background order sync failed');
     });
 
-    // Immediately respond to the client.
-    reply.code(202).send({ message: "Synchronization process started in the background." });
+    return reply.code(202).send({ message: "Synchronization process started in the background." });
   });
 
 

@@ -1,7 +1,15 @@
 import type { FastifyPluginAsync } from 'fastify';
+import { z } from 'zod';
 import { verifyNuvemshopWebhook } from '../middlewares/nuvemshop.middleware.js';
-import { productService } from '../services/product.service.js';
-import { orderService } from '../services/order.service.js';
+import { nuvemshopService } from '../services/nuvemshop.service.js';
+
+// Nuvemshop sends only identifiers; the record itself is fetched from the API.
+const webhookBody = z.object({
+  store_id: z.union([z.number(), z.string()]).optional(),
+  event: z.string().min(1),
+  id: z.union([z.number(), z.string().min(1)]),
+});
+
 export const webhookRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post(
     '/nuvemshop',
@@ -12,36 +20,11 @@ export const webhookRoutes: FastifyPluginAsync = async (fastify) => {
       config: { rateLimit: false },
     },
     async (request, reply) => {
-      const event = request.headers['x-webhook-event'] as string;
-
-      console.log(`Webhook event received: ${event}`);
-
-      try {
-        switch (event) {
-          case 'product/created':
-          case 'product/updated':
-            await productService.handleNuvemshopWebhook(request.body as any);
-            break;
-
-          case 'product/deleted':
-            // TODO: Implementar lógica para soft-delete ou desativar produto
-            console.log(`Product deleted event received: ${event}`);
-            break;
-
-          case 'order/created':
-          case 'order/updated':
-            await orderService.handleNuvemshopWebhook(request.body as any);
-            break;
-
-          default:
-            console.warn(`Unhandled webhook event: ${event}`);
-        }
-
-        return reply.code(200).send({ status: 'received', event: event });
-      } catch (error) {
-        fastify.log.error({ err: error, event }, 'Webhook processing failed');
-        return reply.code(500).send({ error: 'Internal server error' });
-      }
+      const payload = webhookBody.parse(request.body);
+      const result = await nuvemshopService.handleWebhook(payload);
+      request.log.info({ event: payload.event, id: payload.id, status: result.status, reason: result.reason }, 'Nuvemshop webhook');
+      // Any error propagates to the global handler (5xx), so Nuvemshop retries the delivery.
+      return reply.code(200).send(result);
     }
   );
 };

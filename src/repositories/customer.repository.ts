@@ -60,9 +60,11 @@ export class CustomerRepository {
       return null;
     }
 
+    // Orders can be processed out of order (webhooks, re-syncs): purchase dates only widen.
     const merge: Record<string, unknown> = {
       name: data.name,
-      last_purchase_at: data.date,
+      first_purchase_at: db.raw(`LEAST(${this.table}.first_purchase_at, EXCLUDED.first_purchase_at)`),
+      last_purchase_at: db.raw(`GREATEST(${this.table}.last_purchase_at, EXCLUDED.last_purchase_at)`),
       updated_at: new Date(),
     };
     if (data.city != null) merge.city = data.city;

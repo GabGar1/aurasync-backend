@@ -21,9 +21,11 @@ export const productRoutes: FastifyPluginAsyncZod = async (fastify) => {
 
   fastify.post('/sync/nuvemshop', {
     onRequest: [fastify.authenticate],
-    preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])]
+    preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])],
+    schema: { querystring: z.object({ full: z.enum(['true', 'false']).optional() }) },
   }, async (request, reply) => {
-    const result = await nuvemshopService.syncProducts();
+    const { full } = request.query as { full?: 'true' | 'false' };
+    const result = await nuvemshopService.syncProducts({ full: full === 'true' });
     return reply.send(result);
   });
 

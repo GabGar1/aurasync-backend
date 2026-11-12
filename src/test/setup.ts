@@ -13,7 +13,8 @@ export const cleanupDatabase = async () => {
     'cost_components',
     'credit_fee_tiers',
     'product_subgroups',
-    'customers'
+    'customers',
+    'integration_sync_state'
   ];
 
   try {

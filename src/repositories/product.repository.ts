@@ -215,6 +215,7 @@ export class ProductRepository {
             .update({
               ...productData,
               updated_at: new Date(),
+              deleted_at: null, // a product deleted earlier and published again is restored
             })
             .returning('*');
       } else {
@@ -235,9 +236,9 @@ export class ProductRepository {
       }
 
       const productInternalId = product.id;
+      // Soft-deleted variants are included so a restored product reuses (and revives) them.
       const existingVariants = await trx(this.variantsTable)
-          .where({product_id: productInternalId})
-          .whereNull('deleted_at');
+          .where({product_id: productInternalId});
 
       const updatedVariants: ProductVariant[] = [];
 
@@ -271,6 +272,13 @@ export class ProductRepository {
 
       return {...product, variants: updatedVariants};
     });
+  }
+
+  /** Soft-deletes the product mirrored from a Nuvemshop product; false when it is unknown or already deleted. */
+  async softDeleteByNuvemshopId(nuvemshopId: string): Promise<boolean> {
+    const product = await db(this.productsTable).where({nuvemshop_id: nuvemshopId}).whereNull('deleted_at').first();
+    if (!product) return false;
+    return this.delete(product.id);
   }
 
   async findByNuvemshopId(nuvemshopId: string) {

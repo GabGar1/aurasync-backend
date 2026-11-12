@@ -120,6 +120,17 @@ export class ProductService {
   async upsertProductFromNuvemshop(data: NuvemshopProductData): Promise<ProductWithVariants> {
     return await productRepository.upsertProductFromNuvemshop(data);
   }
+
+  async handleNuvemshopProductDeleted(nuvemshopId: string): Promise<boolean> {
+    const deleted = await productRepository.softDeleteByNuvemshopId(nuvemshopId);
+    if (deleted) {
+      websocketManager.broadcast({
+        event: 'products_updated',
+        message: `Product ${nuvemshopId} was removed on Nuvemshop.`,
+      });
+    }
+    return deleted;
+  }
 }
 
 export const productService = new ProductService();

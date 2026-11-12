@@ -46,7 +46,8 @@ Router never calls Repository. Service never builds raw Knex queries.
 - **Transactions**: multi-table writes MUST use `db.transaction(async (trx) => {...})`.
 - **Validation**: input goes through `XSchema.<action>.parse()` in Service before Repository.
 - **Error responses**: `{ error: string }` with HTTP 400/401/403/404/500.
-- **Webhook HMAC**: `x-webhook-signature` verified via `nuvemshop.middleware.ts`; raw body enabled only for `/api/webhooks/nuvemshop` via `fastify-raw-body`.
+- **Webhook HMAC**: `x-linkedstore-hmac-sha256` (hex HMAC-SHA256 of the raw body with the app secret, `NUVEMSHOP_WEBHOOK_SECRET`) verified via `nuvemshop.middleware.ts`; raw body enabled only for `/api/webhooks/nuvemshop` via `fastify-raw-body`.
+- **Nuvemshop integration**: webhooks carry only `{ store_id, event, id }`; `nuvemshopService.handleWebhook` fetches the record by id. Every Nuvemshop payload goes through `src/lib/nuvemshop-mapper.ts` (sync and webhook share it). Syncs are incremental from `integration_sync_state` unless `?full=true`, one run per resource at a time (409 otherwise). Tests use `src/test/fake-nuvemshop.ts` via `NUVEMSHOP_API_URL`.
 - **Auth**: `fastify.authenticate` (JWT) on protected routes; `requireRole(['ADMIN', 'SUPER_ADMIN'])` for admin-only endpoints.
 - **Single util per need**: extract shared logic to `src/lib/` only after a second real use appears.
 
@@ -66,7 +67,6 @@ Router never calls Repository. Service never builds raw Knex queries.
 - **user.schema.ts:49** — `listResponse.id` is typed `z.number()` but DB uses UUID. This is a bug; use `z.string().uuid()` for new schemas.
 - **Dead deps**: `express`, `@types/express`, and `cors` in package.json are unused (Fastify is the framework). Do not add Express code.
 - **`fastify-type-provider-zod`**: used only in `user.router.ts`. Other routers use plain `FastifyPluginAsync`. Either path is acceptable.
-- **Nuvemshop service**: has a top-level side-effect console.log in `nuvemshop.service.ts` (module eval). Do not replicate this pattern.
 - **Inventory stock update**: `inventory.repository.ts` directly mutates `product_variants.stock_quantity`. This bypasses the service layer for that specific operation — model new stock logic the same way.
 
 ## Git workflow
