@@ -1,3 +1,4 @@
+import { BadRequestError } from '../lib/errors.js';
 import { inventoryRepository, type CreateInventoryInput } from '../repositories/inventory.repository.js';
 import { InventorySchema, type InventoryCreate } from '../schemas/inventory.schema.js';
 
@@ -7,10 +8,10 @@ export class InventoryService {
     const validatedData = InventorySchema.create.parse(data);
 
     if (validatedData.type === 'SALE' && validatedData.quantity_changed > 0) {
-      throw new Error('SALE transactions must have a negative quantity_changed');
+      throw new BadRequestError('SALE transactions must have a negative quantity_changed');
     }
     if (validatedData.type === 'RESTOCK' && validatedData.quantity_changed < 0) {
-      throw new Error('RESTOCK transactions must have a positive quantity_changed');
+      throw new BadRequestError('RESTOCK transactions must have a positive quantity_changed');
     }
 
     const input: CreateInventoryInput = {
@@ -28,7 +29,7 @@ export class InventoryService {
 
   async getVariantHistory(variantId: string) {
     if (!variantId) {
-      throw new Error('Variant ID is required');
+      throw new BadRequestError('Variant ID is required');
     }
     return await inventoryRepository.getHistoryByVariantId(variantId);
   }

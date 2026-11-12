@@ -4,6 +4,7 @@ import { productSubgroupRepository } from '../repositories/product-subgroup.repo
 import { CostSchema, type CostComponentCreate, type CostComponentUpdate, type CostAssociationCreate, type CostAssociateSubgroup, type CostAssociateBatch, type CostAssociateSubgroupBatch, type CostDeleteSubgroupAssociations, type CostSimulateInput, type CostAssociateProductBatch } from '../schemas/cost.schema.js';
 import { computeOrderCosts } from '../lib/cost-engine.js';
 import { db } from '../lib/db.js';
+import { NotFoundError } from '../lib/errors.js';
 
 export class CostService {
   async listComponents(filter: { is_active?: boolean; search?: string } = {}) {
@@ -33,22 +34,22 @@ export class CostService {
   async updateComponent(id: string, data: CostComponentUpdate) {
     const validated = CostSchema.update.parse(data);
     const existing = await costRepository.findComponentById(id);
-    if (!existing) throw new Error('Cost component not found');
+    if (!existing) throw new NotFoundError('Cost component not found');
     return costRepository.updateComponent(id, validated);
   }
 
   async deleteComponent(id: string) {
     const existing = await costRepository.findComponentById(id);
-    if (!existing) throw new Error('Cost component not found');
+    if (!existing) throw new NotFoundError('Cost component not found');
     return costRepository.softDeleteComponent(id);
   }
 
   async associateComponent(data: CostAssociationCreate) {
     const validated = CostSchema.associate.parse(data);
     const product = await productRepository.findById(validated.product_id);
-    if (!product) throw new Error('Product not found');
+    if (!product) throw new NotFoundError('Product not found');
     const component = await costRepository.findComponentById(validated.cost_component_id);
-    if (!component) throw new Error('Cost component not found');
+    if (!component) throw new NotFoundError('Cost component not found');
     const association = await costRepository.associateComponent(validated);
     const associations = await costRepository.listAssociationsByProduct(validated.product_id);
     const full = associations.find(a => a.id === association.id);
@@ -61,7 +62,7 @@ export class CostService {
 
   async getAssociationsByProduct(productId: string) {
     const product = await productRepository.findById(productId);
-    if (!product) throw new Error('Product not found');
+    if (!product) throw new NotFoundError('Product not found');
     const associations = await costRepository.listAssociationsByProduct(productId);
     return associations;
   }
@@ -74,7 +75,7 @@ export class CostService {
       .whereNull('product_variants.deleted_at')
       .select('product_variants.id', 'product_variants.product_id', 'products.subgroup_id', 'product_variants.cost_price', 'product_variants.packaging_cost', 'product_variants.platform_fee_percent')
       .first();
-    if (!variant) throw new Error('Product variant not found');
+    if (!variant) throw new NotFoundError('Product variant not found');
 
     const toComponent = (c: any) => ({
       id: c.id,
@@ -115,9 +116,9 @@ export class CostService {
   async associateSubgroup(data: CostAssociateSubgroup) {
     const validated = CostSchema.associateSubgroup.parse(data);
     const subgroup = await productSubgroupRepository.findById(validated.subgroup_id);
-    if (!subgroup) throw new Error('Subgroup not found');
+    if (!subgroup) throw new NotFoundError('Subgroup not found');
     const component = await costRepository.findComponentById(validated.cost_component_id);
-    if (!component) throw new Error('Cost component not found');
+    if (!component) throw new NotFoundError('Cost component not found');
     return costRepository.associateSubgroup(validated);
   }
 
@@ -127,26 +128,26 @@ export class CostService {
 
   async getAssociationsBySubgroup(subgroupId: string) {
     const subgroup = await productSubgroupRepository.findById(subgroupId);
-    if (!subgroup) throw new Error('Subgroup not found');
+    if (!subgroup) throw new NotFoundError('Subgroup not found');
     return costRepository.listAssociationsBySubgroup(subgroupId);
   }
 
   async associateBatch(data: CostAssociateBatch) {
     const validated = CostSchema.associateBatch.parse(data);
     const component = await costRepository.findComponentById(validated.cost_component_id);
-    if (!component) throw new Error('Cost component not found');
+    if (!component) throw new NotFoundError('Cost component not found');
 
     const results: { product: Array<{ product_id: string }>; subgroup: Array<{ subgroup_id: string }> } = { product: [], subgroup: [] };
 
     for (const productId of validated.product_ids ?? []) {
       const product = await productRepository.findById(productId);
-      if (!product) throw new Error(`Product ${productId} not found`);
+      if (!product) throw new NotFoundError(`Product ${productId} not found`);
       const assoc = await costRepository.associateComponent({ product_id: productId, cost_component_id: validated.cost_component_id, quantity: validated.quantity });
       results.product.push({ product_id: assoc.product_id });
     }
     for (const subgroupId of validated.subgroup_ids ?? []) {
       const subgroup = await productSubgroupRepository.findById(subgroupId);
-      if (!subgroup) throw new Error(`Subgroup ${subgroupId} not found`);
+      if (!subgroup) throw new NotFoundError(`Subgroup ${subgroupId} not found`);
       const assoc = await costRepository.associateSubgroup({ subgroup_id: subgroupId, cost_component_id: validated.cost_component_id, quantity: validated.quantity });
       results.subgroup.push({ subgroup_id: assoc.subgroup_id });
     }
@@ -156,11 +157,11 @@ export class CostService {
   async associateSubgroupBatch(data: CostAssociateSubgroupBatch) {
     const validated = CostSchema.associateSubgroupBatch.parse(data);
     const subgroup = await productSubgroupRepository.findById(validated.subgroup_id);
-    if (!subgroup) throw new Error('Subgroup not found');
+    if (!subgroup) throw new NotFoundError('Subgroup not found');
 
     for (const componentId of validated.cost_component_ids) {
       const component = await costRepository.findComponentById(componentId);
-      if (!component) throw new Error(`Cost component ${componentId} not found`);
+      if (!component) throw new NotFoundError(`Cost component ${componentId} not found`);
     }
 
     const associations = await costRepository.associateSubgroupBatch(
@@ -174,11 +175,11 @@ export class CostService {
   async associateProductBatch(data: CostAssociateProductBatch) {
     const validated = CostSchema.associateProductBatch.parse(data);
     const product = await productRepository.findById(validated.product_id);
-    if (!product) throw new Error('Product not found');
+    if (!product) throw new NotFoundError('Product not found');
 
     for (const componentId of validated.cost_component_ids) {
       const component = await costRepository.findComponentById(componentId);
-      if (!component) throw new Error(`Cost component ${componentId} not found`);
+      if (!component) throw new NotFoundError(`Cost component ${componentId} not found`);
     }
 
     const associations = await costRepository.associateProductBatch(
@@ -192,7 +193,7 @@ export class CostService {
   async deleteSubgroupAssociations(data: CostDeleteSubgroupAssociations) {
     const validated = CostSchema.deleteSubgroupAssociations.parse(data);
     const subgroup = await productSubgroupRepository.findById(validated.subgroup_id);
-    if (!subgroup) throw new Error('Subgroup not found');
+    if (!subgroup) throw new NotFoundError('Subgroup not found');
     return costRepository.hardDeleteSubgroupAssociations(validated.subgroup_id, validated.cost_component_ids);
   }
 }

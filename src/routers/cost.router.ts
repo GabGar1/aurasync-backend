@@ -13,16 +13,12 @@ export const costRoutes: FastifyPluginAsyncZod = async (fastify) => {
     preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])],
     schema: { querystring: z.object({ is_active: z.string().optional(), search: z.string().optional() }) },
   }, async (request, reply) => {
-    try {
-      const { is_active, search } = request.query;
-      const filters: { is_active?: boolean; search?: string } = {};
-      if (is_active !== undefined) filters.is_active = is_active === 'true';
-      if (search !== undefined) filters.search = search;
-      const components = await costService.listComponents(filters);
-      return reply.send(components);
-    } catch (error: any) {
-      return reply.code(400).send({ error: error.message });
-    }
+    const { is_active, search } = request.query;
+    const filters: { is_active?: boolean; search?: string } = {};
+    if (is_active !== undefined) filters.is_active = is_active === 'true';
+    if (search !== undefined) filters.search = search;
+    const components = await costService.listComponents(filters);
+    return reply.send(components);
   });
 
   fastify.post('/', {
@@ -30,12 +26,8 @@ export const costRoutes: FastifyPluginAsyncZod = async (fastify) => {
     preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])],
     schema: { body: CostSchema.create },
   }, async (request, reply) => {
-    try {
-      const component = await costService.createComponent(request.body);
-      return reply.code(201).send(component);
-    } catch (error: any) {
-      return reply.code(400).send({ error: error.message });
-    }
+    const component = await costService.createComponent(request.body);
+    return reply.code(201).send(component);
   });
 
   fastify.post('/associate', {
@@ -43,12 +35,8 @@ export const costRoutes: FastifyPluginAsyncZod = async (fastify) => {
     preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])],
     schema: { body: CostSchema.associate },
   }, async (request, reply) => {
-    try {
-      const association = await costService.associateComponent(request.body);
-      return reply.code(201).send(association);
-    } catch (error: any) {
-      return reply.code(400).send({ error: error.message });
-    }
+    const association = await costService.associateComponent(request.body);
+    return reply.code(201).send(association);
   });
 
   fastify.post('/associate-subgroup', {
@@ -56,12 +44,8 @@ export const costRoutes: FastifyPluginAsyncZod = async (fastify) => {
     preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])],
     schema: { body: CostSchema.associateSubgroup },
   }, async (request, reply) => {
-    try {
-      const association = await costService.associateSubgroup(request.body);
-      return reply.code(201).send(association);
-    } catch (error: any) {
-      return reply.code(400).send({ error: error.message });
-    }
+    const association = await costService.associateSubgroup(request.body);
+    return reply.code(201).send(association);
   });
 
   fastify.post('/associate-batch', {
@@ -69,12 +53,8 @@ export const costRoutes: FastifyPluginAsyncZod = async (fastify) => {
     preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])],
     schema: { body: CostSchema.associateBatch },
   }, async (request, reply) => {
-    try {
-      const result = await costService.associateBatch(request.body);
-      return reply.code(201).send(result);
-    } catch (error: any) {
-      return reply.code(400).send({ error: error.message });
-    }
+    const result = await costService.associateBatch(request.body);
+    return reply.code(201).send(result);
   });
 
   fastify.delete('/associate-subgroup/:id', {
@@ -82,13 +62,9 @@ export const costRoutes: FastifyPluginAsyncZod = async (fastify) => {
     preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])],
     schema: { params: z.object({ id: z.string().uuid() }) },
   }, async (request, reply) => {
-    try {
-      const removed = await costService.removeSubgroupAssociation(request.params.id);
-      if (!removed) return reply.code(404).send({ error: 'Association not found' });
-      return reply.code(204).send();
-    } catch (error: any) {
-      return reply.code(400).send({ error: error.message });
-    }
+    const removed = await costService.removeSubgroupAssociation(request.params.id);
+    if (!removed) return reply.code(404).send({ error: 'Association not found' });
+    return reply.code(204).send();
   });
 
   fastify.post('/associate-subgroup-batch', {
@@ -96,12 +72,8 @@ export const costRoutes: FastifyPluginAsyncZod = async (fastify) => {
     preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])],
     schema: { body: CostSchema.associateSubgroupBatch },
   }, async (request, reply) => {
-    try {
-      const result = await costService.associateSubgroupBatch(request.body);
-      return reply.code(201).send(result);
-    } catch (error: any) {
-      return reply.code(400).send({ error: error.message });
-    }
+    const result = await costService.associateSubgroupBatch(request.body);
+    return reply.code(201).send(result);
   });
 
   fastify.delete('/associate-subgroup-batch', {
@@ -109,13 +81,9 @@ export const costRoutes: FastifyPluginAsyncZod = async (fastify) => {
     preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])],
     schema: { body: CostSchema.deleteSubgroupAssociations },
   }, async (request, reply) => {
-    try {
-      const removed = await costService.deleteSubgroupAssociations(request.body);
-      if (!removed) return reply.code(404).send({ error: 'No associations found' });
-      return reply.code(204).send();
-    } catch (error: any) {
-      return reply.code(400).send({ error: error.message });
-    }
+    const removed = await costService.deleteSubgroupAssociations(request.body);
+    if (!removed) return reply.code(404).send({ error: 'No associations found' });
+    return reply.code(204).send();
   });
 
   fastify.post('/associate-product-batch', {
@@ -123,12 +91,8 @@ export const costRoutes: FastifyPluginAsyncZod = async (fastify) => {
     preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])],
     schema: { body: CostSchema.associateProductBatch },
   }, async (request, reply) => {
-    try {
-      const result = await costService.associateProductBatch(request.body);
-      return reply.code(201).send(result);
-    } catch (error: any) {
-      return reply.code(400).send({ error: error.message });
-    }
+    const result = await costService.associateProductBatch(request.body);
+    return reply.code(201).send(result);
   });
 
   fastify.get('/subgroup/:subgroupId', {
@@ -136,12 +100,8 @@ export const costRoutes: FastifyPluginAsyncZod = async (fastify) => {
     preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])],
     schema: { params: z.object({ subgroupId: z.string().uuid() }) },
   }, async (request, reply) => {
-    try {
-      const associations = await costService.getAssociationsBySubgroup(request.params.subgroupId);
-      return reply.send({ associations });
-    } catch (error: any) {
-      return reply.code(400).send({ error: error.message });
-    }
+    const associations = await costService.getAssociationsBySubgroup(request.params.subgroupId);
+    return reply.send({ associations });
   });
 
   fastify.delete('/associate/:id', {
@@ -149,13 +109,9 @@ export const costRoutes: FastifyPluginAsyncZod = async (fastify) => {
     preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])],
     schema: { params: z.object({ id: z.string().uuid() }) },
   }, async (request, reply) => {
-    try {
-      const removed = await costService.removeAssociation(request.params.id);
-      if (!removed) return reply.code(404).send({ error: 'Association not found' });
-      return reply.code(204).send();
-    } catch (error: any) {
-      return reply.code(400).send({ error: error.message });
-    }
+    const removed = await costService.removeAssociation(request.params.id);
+    if (!removed) return reply.code(404).send({ error: 'Association not found' });
+    return reply.code(204).send();
   });
 
   fastify.get('/product/:productId', {
@@ -163,12 +119,8 @@ export const costRoutes: FastifyPluginAsyncZod = async (fastify) => {
     preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])],
     schema: { params: z.object({ productId: z.string().uuid() }) },
   }, async (request, reply) => {
-    try {
-      const associations = await costService.getAssociationsByProduct(request.params.productId);
-      return reply.send({ associations });
-    } catch (error: any) {
-      return reply.code(400).send({ error: error.message });
-    }
+    const associations = await costService.getAssociationsByProduct(request.params.productId);
+    return reply.send({ associations });
   });
 
   fastify.post('/simulate', {
@@ -176,12 +128,8 @@ export const costRoutes: FastifyPluginAsyncZod = async (fastify) => {
     preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])],
     schema: { body: CostSchema.simulate },
   }, async (request, reply) => {
-    try {
-      const result = await costService.simulateCosts(request.body);
-      return reply.send(result);
-    } catch (error: any) {
-      return reply.code(400).send({ error: error.message });
-    }
+    const result = await costService.simulateCosts(request.body);
+    return reply.send(result);
   });
 
   fastify.put('/:id', {
@@ -189,13 +137,9 @@ export const costRoutes: FastifyPluginAsyncZod = async (fastify) => {
     preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])],
     schema: { params: z.object({ id: z.string().uuid() }), body: CostSchema.update },
   }, async (request, reply) => {
-    try {
-      const component = await costService.updateComponent(request.params.id, request.body);
-      if (!component) return reply.code(404).send({ error: 'Cost component not found' });
-      return reply.send(component);
-    } catch (error: any) {
-      return reply.code(400).send({ error: error.message });
-    }
+    const component = await costService.updateComponent(request.params.id, request.body);
+    if (!component) return reply.code(404).send({ error: 'Cost component not found' });
+    return reply.send(component);
   });
 
   fastify.delete('/:id', {
@@ -203,12 +147,8 @@ export const costRoutes: FastifyPluginAsyncZod = async (fastify) => {
     preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])],
     schema: { params: z.object({ id: z.string().uuid() }) },
   }, async (request, reply) => {
-    try {
-      const deleted = await costService.deleteComponent(request.params.id);
-      if (!deleted) return reply.code(404).send({ error: 'Cost component not found' });
-      return reply.code(204).send();
-    } catch (error: any) {
-      return reply.code(400).send({ error: error.message });
-    }
+    const deleted = await costService.deleteComponent(request.params.id);
+    if (!deleted) return reply.code(404).send({ error: 'Cost component not found' });
+    return reply.code(204).send();
   });
 };

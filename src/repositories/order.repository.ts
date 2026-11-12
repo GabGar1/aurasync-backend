@@ -1,3 +1,4 @@
+import { BadRequestError, NotFoundError } from '../lib/errors.js';
 import { db } from '../lib/db.js';
 import type { Knex } from 'knex';
 import { costRepository } from './cost.repository.js';
@@ -217,7 +218,7 @@ export class OrderRepository {
 
       const engineItems: CostEngineItemInput[] = items.map(item => {
         const v = variantMap.get(item.variant_id);
-        if (!v) throw new Error(`Product variant ${item.variant_id} not found`);
+        if (!v) throw new NotFoundError(`Product variant ${item.variant_id} not found`);
         const productComps = (componentsByProduct.get(v.product_id) || []).map(toComponent);
         const subgroupComps = v.subgroup_id ? (componentsBySubgroup.get(v.subgroup_id) || []).map(toComponent) : [];
         return {
@@ -252,11 +253,11 @@ export class OrderRepository {
           .first();
 
         if (!variant) {
-          throw new Error(`Product variant ${item.variant_id} not found`);
+          throw new NotFoundError(`Product variant ${item.variant_id} not found`);
         }
 
         if (variant.stock_quantity < item.quantity) {
-          throw new Error(
+          throw new BadRequestError(
             `Insufficient stock for variant ${item.variant_id}. Available: ${variant.stock_quantity}, requested: ${item.quantity}`
           );
         }
@@ -543,9 +544,9 @@ export class OrderRepository {
       .orderBy('created_at', 'desc');
 
     if (filters.fulfillment_status) {
-      query = query.where(
-        db.raw("COALESCE(LOWER(fulfillment_status), 'pending')"),
-        filters.fulfillment_status.toLowerCase()
+      query = query.whereRaw(
+        "COALESCE(LOWER(fulfillment_status), 'pending') = ?",
+        [filters.fulfillment_status.toLowerCase()]
       );
     }
 

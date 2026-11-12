@@ -1,5 +1,6 @@
 import { db } from '../lib/db.js';
 import type { OrderCostResult } from '../lib/cost-engine.js';
+import { BadRequestError, NotFoundError } from '../lib/errors.js';
 
 export interface ExternalSaleItemInput {
   variant_id: string;
@@ -83,9 +84,9 @@ export class ExternalSaleRepository {
           .where({ id: item.variant_id })
           .forUpdate()
           .first();
-        if (!variant) throw new Error(`Product variant ${item.variant_id} not found`);
+        if (!variant) throw new NotFoundError(`Product variant ${item.variant_id} not found`);
         if (variant.stock_quantity < item.quantity) {
-          throw new Error(`Insufficient stock for variant ${item.variant_id}. Available: ${variant.stock_quantity}, requested: ${item.quantity}`);
+          throw new BadRequestError(`Insufficient stock for variant ${item.variant_id}. Available: ${variant.stock_quantity}, requested: ${item.quantity}`);
         }
         await trx('product_variants')
           .where({ id: item.variant_id })

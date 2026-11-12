@@ -10,49 +10,42 @@ export const authRoutes: FastifyPluginAsyncZod = async (app) => {
     config: { rateLimit: { max: 5, timeWindow: '1 minute' } },
     schema: { body: UserSchema.login }
   }, async (request, reply) => {
-    try {
-      const user = await userService.authenticateUser(request.body);
-      if (!user) {
-        return reply.status(401).send({ error: "Invalid email or password" });
-      }
-
-      const token = app.jwt.sign(
-        { sub: user.id, role: user.role, name: user.first_name },
-        { expiresIn: "2h" }
-      );
-
-      reply.setCookie('aurasync_token', token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
-        path: '/',
-        maxAge: 7200,
-      });
-
-      return reply.status(200).send({ token, user });
-    } catch (error: any) {
-      return reply.status(400).send({ error: error.message });
+    const user = await userService.authenticateUser(request.body);
+    if (!user) {
+      return reply.status(401).send({ error: "Invalid email or password" });
     }
+
+    const token = app.jwt.sign(
+      { sub: user.id, role: user.role, name: user.first_name },
+      { expiresIn: "2h" }
+    );
+
+    reply.setCookie('aurasync_token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      path: '/',
+      maxAge: 7200,
+    });
+
+    // The JWT lives only in the httpOnly cookie; returning it would make it readable by scripts.
+    return reply.status(200).send({ user });
   });
 
   app.get("/me", { onRequest: [app.authenticate] }, async (request, reply) => {
-    try {
-      const user = await userService.getUserById(request.user.sub);
-      if (!user) {
-        return reply.status(404).send({ error: "User not found" });
-      }
-      return reply.send({
-        id: user.id,
-        email: user.email,
-        first_name: user.first_name,
-        last_name: user.last_name,
-        role: user.role,
-        status: user.status,
-        created_at: user.created_at,
-      });
-    } catch (error: any) {
-      return reply.status(400).send({ error: error.message });
+    const user = await userService.getUserById(request.user.sub);
+    if (!user) {
+      return reply.status(404).send({ error: "User not found" });
     }
+    return reply.send({
+      id: user.id,
+      email: user.email,
+      first_name: user.first_name,
+      last_name: user.last_name,
+      role: user.role,
+      status: user.status,
+      created_at: user.created_at,
+    });
   });
 
   app.post("/logout", { preHandler: [csrfProtection()] }, async (_request, reply) => {

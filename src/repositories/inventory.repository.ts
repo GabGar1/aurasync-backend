@@ -1,3 +1,4 @@
+import { BadRequestError, NotFoundError } from '../lib/errors.js';
 import { db } from '../lib/db.js';
 
 export interface InventoryTransaction {
@@ -29,13 +30,13 @@ export class InventoryRepository {
         .first();
 
       if (!variant) {
-        throw new Error('Product variant not found');
+        throw new NotFoundError('Product variant not found');
       }
 
       const newStock = variant.stock_quantity + data.quantity_changed;
 
       if (newStock < 0) {
-        throw new Error('Insufficient stock for this transaction');
+        throw new BadRequestError('Insufficient stock for this transaction');
       }
 
       await trx('product_variants')

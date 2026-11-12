@@ -1,6 +1,7 @@
 import bcrypt from 'bcrypt';
 import { userRepository, type User, type CreateUserInput, type UpdateUserInput } from '../repositories/user.repository.js';
 import { UserSchema, type UserRegister, type UserLogin, type UserUpdate, type UserChangePassword, type UserResponse, type UserListResponse } from '../schemas/user.schema.js';
+import { BadRequestError, ConflictError, NotFoundError } from '../lib/errors.js';
 
 export class UserService {
   private saltRounds = 12;
@@ -31,7 +32,7 @@ export class UserService {
 
     const existingUser = await userRepository.findByEmail(validatedData.email);
     if (existingUser) {
-      throw new Error('Email already registered');
+      throw new ConflictError('Email already registered');
     }
 
     const passwordHash = await this.hashPassword(validatedData.password);
@@ -79,7 +80,7 @@ export class UserService {
 
     const existingUser = await userRepository.findById(id);
     if (!existingUser) {
-      throw new Error('User not found');
+      throw new NotFoundError('User not found');
     }
 
     const updateData: UpdateUserInput = {};
@@ -109,12 +110,12 @@ export class UserService {
 
     const user = await userRepository.findById(id);
     if (!user) {
-      throw new Error('User not found');
+      throw new NotFoundError('User not found');
     }
 
     const isValidPassword = await this.verifyPassword(validatedData.current_password, user.password_hash);
     if (!isValidPassword) {
-      throw new Error('Current password is incorrect');
+      throw new BadRequestError('Current password is incorrect');
     }
 
     const newPasswordHash = await this.hashPassword(validatedData.new_password);
@@ -125,7 +126,7 @@ export class UserService {
   async deleteUser(id: string): Promise<boolean> {
     const user = await userRepository.findById(id);
     if (!user) {
-      throw new Error('User not found');
+      throw new NotFoundError('User not found');
     }
 
     return userRepository.delete(id);

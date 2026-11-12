@@ -6,6 +6,7 @@ import { computeOrderCosts, type CostEngineItemInput } from '../lib/cost-engine.
 import { db } from '../lib/db.js';
 import { websocketManager } from '../lib/websocket.js';
 import { customerService } from './customer.service.js';
+import { NotFoundError } from '../lib/errors.js';
 
 export class ExternalSaleService {
   async createExternalSale(data: ExternalSaleCreate) {
@@ -18,7 +19,7 @@ export class ExternalSaleService {
       .whereNull('product_variants.deleted_at')
       .select('product_variants.id', 'product_variants.product_id', 'products.subgroup_id', 'product_variants.cost_price', 'product_variants.packaging_cost', 'product_variants.platform_fee_percent');
     if (variants.length !== variantIds.length) {
-      throw new Error('One or more variants were not found');
+      throw new NotFoundError('One or more variants were not found');
     }
     const variantMap = new Map(variants.map(v => [v.id, v]));
     const productIds = [...new Set(variants.map(v => v.product_id))];

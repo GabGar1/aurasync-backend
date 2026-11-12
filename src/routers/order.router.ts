@@ -5,17 +5,14 @@ import { requireRole } from "../middlewares/role.middleware.js";
 import { OrderSchema } from '../schemas/order.schema.js';
 import { z } from "zod";
 import { csrfProtection } from "../middlewares/csrf.middleware.js";
+import { clampLimit, clampPage } from "../lib/config.js";
 
 export const orderRoutes: FastifyPluginAsyncZod = async (fastify) => {
   fastify.addHook('preHandler', csrfProtection());
 
   fastify.post('/', { onRequest: [fastify.authenticate], preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])], schema: { body: OrderSchema.create } }, async (request, reply) => {
-    try {
-      const order = await orderService.createOrder(request.body);
-      return reply.code(201).send(order);
-    } catch (error: any) {
-      return reply.code(400).send({ error: error.message });
-    }
+    const order = await orderService.createOrder(request.body);
+    return reply.code(201).send(order);
   });
 
   fastify.post('/sync/nuvemshop', { onRequest: [fastify.authenticate], preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])] }, (request, reply) => {
@@ -30,59 +27,43 @@ export const orderRoutes: FastifyPluginAsyncZod = async (fastify) => {
 
 
   fastify.get('/', { onRequest: [fastify.authenticate], preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])], schema: { querystring: z.object({ page: z.coerce.number().optional(), limit: z.coerce.number().optional(), fulfillment_status: z.string().optional(), search: z.string().optional() }) } }, async (request, reply) => {
-    try {
-      const { page, limit, fulfillment_status, search } = request.query;
+    const { page, limit, fulfillment_status, search } = request.query;
 
-      const filters: { fulfillment_status?: string; search?: string } = {};
-      if (fulfillment_status !== undefined) filters.fulfillment_status = fulfillment_status;
-      if (search !== undefined) filters.search = search;
+    const filters: { fulfillment_status?: string; search?: string } = {};
+    if (fulfillment_status !== undefined) filters.fulfillment_status = fulfillment_status;
+    if (search !== undefined) filters.search = search;
 
-      const result = await orderService.getOrders(
-        page ?? 1,
-        limit ?? 10,
-        filters
-      );
+    const result = await orderService.getOrders(
+      clampPage(page),
+      clampLimit(limit, 10),
+      filters
+    );
 
-      return reply.send(result);
-    } catch (error: any) {
-      return reply.code(400).send({ error: error.message });
-    }
+    return reply.send(result);
   });
 
   fastify.get('/:id', { onRequest: [fastify.authenticate], preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])], schema: { params: z.object({ id: z.string().uuid() }) } }, async (request, reply) => {
-    try {
-      const { id } = request.params;
-      const order = await orderService.getOrderById(id);
+    const { id } = request.params;
+    const order = await orderService.getOrderById(id);
 
-      if (!order) return reply.code(404).send({ error: 'Order not found' });
+    if (!order) return reply.code(404).send({ error: 'Order not found' });
 
-      return reply.send(order);
-    } catch (error: any) {
-      return reply.code(400).send({ error: error.message });
-    }
+    return reply.send(order);
   });
 
   fastify.put('/:id', { onRequest: [fastify.authenticate], preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])], schema: { params: z.object({ id: z.string().uuid() }), body: OrderSchema.update } }, async (request, reply) => {
-    try {
-      const { id } = request.params;
-      const order = await orderService.updateOrder(id, request.body);
+    const { id } = request.params;
+    const order = await orderService.updateOrder(id, request.body);
 
-      if (!order) return reply.code(404).send({ error: 'Order not found' });
+    if (!order) return reply.code(404).send({ error: 'Order not found' });
 
-      return reply.send(order);
-    } catch (error: any) {
-      return reply.code(400).send({ error: error.message });
-    }
+    return reply.send(order);
   });
 
   fastify.delete('/:id', { onRequest: [fastify.authenticate], preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])], schema: { params: z.object({ id: z.string().uuid() }) } }, async (request, reply) => {
-    try {
-      const { id } = request.params;
-      await orderService.deleteOrder(id);
+    const { id } = request.params;
+    await orderService.deleteOrder(id);
 
-      return reply.code(204).send();
-    } catch (error: any) {
-      return reply.code(400).send({ error: error.message });
-    }
+    return reply.code(204).send();
   });
 };

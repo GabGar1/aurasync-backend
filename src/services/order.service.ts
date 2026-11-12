@@ -1,3 +1,4 @@
+import { ConflictError, NotFoundError } from '../lib/errors.js';
 import {
   orderRepository,
   type CreateOrderInput,
@@ -62,7 +63,7 @@ export class OrderService {
 
     const existingOrder = await orderRepository.findById(id);
     if (!existingOrder) {
-      throw new Error('Order not found');
+      throw new NotFoundError('Order not found');
     }
 
     const updateData: UpdateOrderInput = {};
@@ -77,11 +78,11 @@ export class OrderService {
   async deleteOrder(id: string): Promise<boolean> {
     const existingOrder = await orderRepository.findById(id);
     if (!existingOrder) {
-      throw new Error('Order not found');
+      throw new NotFoundError('Order not found');
     }
 
     if (existingOrder.status === 'CANCELED') {
-      throw new Error('Order is already canceled');
+      throw new ConflictError('Order is already canceled');
     }
 
     return await orderRepository.delete(id);

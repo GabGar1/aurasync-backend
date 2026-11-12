@@ -8,6 +8,7 @@ import {
 } from '../repositories/product.repository.js';
 import { ProductSchema, type ProductCreate, type ProductUpdate } from '../schemas/product.schema.js';
 import { websocketManager } from '../lib/websocket.js';
+import { ConflictError, NotFoundError } from '../lib/errors.js';
 
 export class ProductService {
 
@@ -16,7 +17,7 @@ export class ProductService {
 
     const existingProduct = await productRepository.findBySlug(validatedData.slug);
     if (existingProduct) {
-      throw new Error('A product with this slug already exists');
+      throw new ConflictError('A product with this slug already exists');
     }
 
     const createInput: CreateProductInput = {
@@ -61,13 +62,13 @@ export class ProductService {
 
     const existingProduct = await productRepository.findById(id);
     if (!existingProduct) {
-      throw new Error('Product not found');
+      throw new NotFoundError('Product not found');
     }
 
     if (validatedData.slug && validatedData.slug !== existingProduct.slug) {
       const slugConflict = await productRepository.findBySlug(validatedData.slug);
       if (slugConflict) {
-        throw new Error('A product with this new slug already exists');
+        throw new ConflictError('A product with this new slug already exists');
       }
     }
 
@@ -87,7 +88,7 @@ export class ProductService {
   async deleteProduct(id: string): Promise<boolean> {
     const existingProduct = await productRepository.findById(id);
     if (!existingProduct) {
-      throw new Error('Product not found');
+      throw new NotFoundError('Product not found');
     }
 
     return await productRepository.delete(id);

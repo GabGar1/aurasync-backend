@@ -1,6 +1,7 @@
 import { costClosingRepository } from '../repositories/cost-closing.repository.js';
 import { computeMonthlyAllocations } from '../lib/monthly-cost-engine.js';
 import { z } from 'zod';
+import { BadRequestError } from '../lib/errors.js';
 
 const CloseMonthSchema = z.object({
   month: z.string().regex(/^\d{4}-\d{2}$/).optional(),
@@ -31,7 +32,7 @@ export class CostClosingService {
   async closeMonth(input: { month?: string | undefined; start_date?: string | undefined; end_date?: string | undefined }) {
     const v = CloseMonthSchema.parse(input);
     if (!v.month && (!v.start_date || !v.end_date)) {
-      throw new Error('Provide month or start_date+end_date');
+      throw new BadRequestError('Provide month or start_date+end_date');
     }
 
     const { start, end } = resolvePeriod(v);

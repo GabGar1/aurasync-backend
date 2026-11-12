@@ -241,6 +241,7 @@ describe("UserService Integration Tests", () => {
           last_name: "Invalid",
           email: "role.invalid@aurasync.com",
           password: "RolePass123!",
+          // @ts-expect-error — an invalid role is exactly what this test exercises
           role: "GOD",
         }),
         /Invalid option: expected one of|Invalid enum value/

@@ -12,11 +12,7 @@ export const creditFeeRoutes: FastifyPluginAsyncZod = async (fastify) => {
     onRequest: [fastify.authenticate],
     preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])],
   }, async (request, reply) => {
-    try {
-      return reply.send(await creditFeeService.listTiers());
-    } catch (error: any) {
-      return reply.code(400).send({ error: error.message });
-    }
+    return reply.send(await creditFeeService.listTiers());
   });
 
   fastify.put('/:id', {
@@ -24,12 +20,8 @@ export const creditFeeRoutes: FastifyPluginAsyncZod = async (fastify) => {
     preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])],
     schema: { params: z.object({ id: z.string().uuid() }), body: CreditFeeSchema.update },
   }, async (request, reply) => {
-    try {
-      const tier = await creditFeeService.updateTier(request.params.id, request.body);
-      if (!tier) return reply.code(404).send({ error: 'Credit fee tier not found' });
-      return reply.send(tier);
-    } catch (error: any) {
-      return reply.code(400).send({ error: error.message });
-    }
+    const tier = await creditFeeService.updateTier(request.params.id, request.body);
+    if (!tier) return reply.code(404).send({ error: 'Credit fee tier not found' });
+    return reply.send(tier);
   });
 };

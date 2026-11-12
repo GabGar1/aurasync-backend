@@ -2,11 +2,7 @@ import axios from 'axios';
 import { productService } from './product.service.js';
 import { orderService } from "./order.service.js";
 import { websocketManager } from '../lib/websocket.js';
-
-console.log('=== [AuraSync Debug] Verificando Variáveis de Ambiente ===');
-console.log('STORE_ID:', process.env.NUVEMSHOP_STORE_ID);
-console.log('TOKEN EXISTE?:', !!process.env.NUVEMSHOP_ACCESS_TOKEN);
-console.log('========================================================');
+import { AppError } from '../lib/errors.js';
 
 class NuvemshopService {
   // Bounded concurrency: each upsert holds a pooled DB connection, so batches
@@ -109,7 +105,7 @@ class NuvemshopService {
 
     } catch (error: any) {
       console.error('Error syncing products with Nuvemshop:', error.response?.data || error.message);
-      throw new Error('Failed to integrate with Nuvemshop', { cause: error });
+      throw new AppError('Failed to integrate with Nuvemshop', 502, { cause: error });
     }
   }
 
@@ -200,7 +196,7 @@ class NuvemshopService {
 
     } catch (error: any) {
       console.error('Error syncing orders with Nuvemshop:', error.response?.data || error.message);
-      throw new Error('Failed to integrate orders with Nuvemshop', { cause: error });
+      throw new AppError('Failed to integrate orders with Nuvemshop', 502, { cause: error });
     }
   }
 }

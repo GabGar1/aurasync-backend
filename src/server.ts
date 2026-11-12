@@ -1,5 +1,6 @@
 import 'dotenv/config';
-import { assertSecureConfig, isProduction, parseAllowedOrigins, resolveHost, resolveTrustProxy, shouldExposeDocs } from "./lib/config.js";
+import { assertSecureConfig, isProduction, parseAllowedOrigins, resolveHost, resolveRateLimit, resolveTrustProxy, shouldExposeDocs } from "./lib/config.js";
+import { errorHandler } from "./lib/error-handler.js";
 import Fastify, {type FastifyReply, type FastifyRequest} from "fastify";
 import {jsonSchemaTransform, serializerCompiler, validatorCompiler} from "fastify-type-provider-zod";
 import { websocketManager } from "./lib/websocket.js";
@@ -52,8 +53,7 @@ app.register(fastifyCookie);
 
 app.register(rateLimit, {
   global: true,
-  max: 100,
-  timeWindow: '15 minutes',
+  ...resolveRateLimit(process.env),
 });
 
 app.register(helmet, {
@@ -85,10 +85,7 @@ app.decorate("authenticate", async (request: FastifyRequest, reply: FastifyReply
   }
 });
 
-app.setErrorHandler((error, request, reply) => {
-  app.log.error({ err: error, url: request.url }, 'Unhandled error');
-  return reply.code(500).send({ error: 'Internal server error' });
-});
+app.setErrorHandler(errorHandler);
 
 if (shouldExposeDocs(process.env)) {
   app.register(fastifySwagger, {

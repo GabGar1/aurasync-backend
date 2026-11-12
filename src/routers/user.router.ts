@@ -5,7 +5,7 @@ import { requireRole } from "../middlewares/role.middleware.js";
 import "@fastify/jwt";
 import { z } from "zod";
 import { csrfProtection } from "../middlewares/csrf.middleware.js";
-import { clampLimit } from "../lib/config.js";
+import { clampLimit, clampPage } from "../lib/config.js";
 
 declare module "@fastify/jwt" {
   interface FastifyJWT {
@@ -30,51 +30,11 @@ export const userRoutes: FastifyPluginAsyncZod = async (app) => {
       },
     },
     async (request, reply) => {
-      try {
-        if (request.body.role && request.user.role !== 'SUPER_ADMIN') {
-          return reply.status(403).send({ error: 'Only SUPER_ADMIN can set user roles' });
-        }
-        const user = await userService.createUser(request.body);
-        return reply.status(201).send(user);
-      } catch (error: any) {
-        return reply.status(400).send({ error: error.message });
+      if (request.body.role && request.user.role !== 'SUPER_ADMIN') {
+        return reply.status(403).send({ error: 'Only SUPER_ADMIN can set user roles' });
       }
-    }
-  );
-
-  app.post(
-    "/login",
-    {
-      config: { rateLimit: { max: 5, timeWindow: '1 minute' } },
-      schema: {
-        body: UserSchema.login,
-      },
-    },
-    async (request, reply) => {
-      try {
-        const user = await userService.authenticateUser(request.body);
-
-        if (!user) {
-          return reply.status(401).send({ error: "Invalid email or password" });
-        }
-
-        const token = app.jwt.sign(
-          { sub: user.id, role: user.role, name: user.first_name },
-          { expiresIn: "2h" }
-        );
-
-        reply.setCookie('aurasync_token', token, {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === 'production',
-          sameSite: 'strict',
-          path: '/',
-          maxAge: 7200,
-        });
-
-        return reply.status(200).send({ token, user });
-      } catch (error: any) {
-        return reply.status(400).send({ error: error.message });
-      }
+      const user = await userService.createUser(request.body);
+      return reply.status(201).send(user);
     }
   );
 
@@ -93,18 +53,14 @@ export const userRoutes: FastifyPluginAsyncZod = async (app) => {
       },
     },
     async (request, reply) => {
-      try {
-        const { page, limit, role, search } = request.query;
+      const { page, limit, role, search } = request.query;
 
-        const filters: { role?: string; search?: string } = {};
-        if (role) filters.role = role;
-        if (search) filters.search = search;
+      const filters: { role?: string; search?: string } = {};
+      if (role) filters.role = role;
+      if (search) filters.search = search;
 
-        const result = await userService.getUsers(page, clampLimit(limit, 10), filters);
-        return reply.send(result);
-      } catch (error: any) {
-        return reply.status(400).send({ error: error.message });
-      }
+      const result = await userService.getUsers(clampPage(page), clampLimit(limit, 10), filters);
+      return reply.send(result);
     }
   );
 
@@ -120,15 +76,11 @@ export const userRoutes: FastifyPluginAsyncZod = async (app) => {
       },
     },
     async (request, reply) => {
-      try {
-        const user = await userService.getUserById(request.params.id);
-        if (!user) {
-          return reply.status(404).send({ error: "User not found" });
-        }
-        return reply.send(user);
-      } catch (error: any) {
-        return reply.status(400).send({ error: error.message });
+      const user = await userService.getUserById(request.params.id);
+      if (!user) {
+        return reply.status(404).send({ error: "User not found" });
       }
+      return reply.send(user);
     }
   );
 
@@ -145,25 +97,21 @@ export const userRoutes: FastifyPluginAsyncZod = async (app) => {
       },
     },
     async (request, reply) => {
-      try {
-        const target = await userService.getUserById(request.params.id);
-        if (!target) {
-          return reply.status(404).send({ error: "User not found" });
-        }
-        if (target.role === 'SUPER_ADMIN' && request.user.role !== 'SUPER_ADMIN') {
-          return reply.status(403).send({ error: 'Forbidden: cannot modify a SUPER_ADMIN account' });
-        }
-        if (request.body.role !== undefined && request.user.role !== 'SUPER_ADMIN') {
-          return reply.status(403).send({ error: 'Only SUPER_ADMIN can change user roles' });
-        }
-        const user = await userService.updateUser(request.params.id, request.body);
-        if (!user) {
-          return reply.status(404).send({ error: "User not found" });
-        }
-        return reply.send(user);
-      } catch (error: any) {
-        return reply.status(400).send({ error: error.message });
+      const target = await userService.getUserById(request.params.id);
+      if (!target) {
+        return reply.status(404).send({ error: "User not found" });
       }
+      if (target.role === 'SUPER_ADMIN' && request.user.role !== 'SUPER_ADMIN') {
+        return reply.status(403).send({ error: 'Forbidden: cannot modify a SUPER_ADMIN account' });
+      }
+      if (request.body.role !== undefined && request.user.role !== 'SUPER_ADMIN') {
+        return reply.status(403).send({ error: 'Only SUPER_ADMIN can change user roles' });
+      }
+      const user = await userService.updateUser(request.params.id, request.body);
+      if (!user) {
+        return reply.status(404).send({ error: "User not found" });
+      }
+      return reply.send(user);
     }
   );
 
@@ -180,15 +128,11 @@ export const userRoutes: FastifyPluginAsyncZod = async (app) => {
       },
     },
     async (request, reply) => {
-      try {
-        const success = await userService.changePassword(request.params.id, request.body);
-        if (!success) {
-          return reply.status(400).send({ error: "Failed to change password" });
-        }
-        return reply.send({ message: "Password changed successfully" });
-      } catch (error: any) {
-        return reply.status(400).send({ error: error.message });
+      const success = await userService.changePassword(request.params.id, request.body);
+      if (!success) {
+        return reply.status(400).send({ error: "Failed to change password" });
       }
+      return reply.send({ message: "Password changed successfully" });
     }
   );
 
@@ -204,22 +148,18 @@ export const userRoutes: FastifyPluginAsyncZod = async (app) => {
       },
     },
     async (request, reply) => {
-      try {
-        const target = await userService.getUserById(request.params.id);
-        if (!target) {
-          return reply.status(404).send({ error: "User not found" });
-        }
-        if (target.role === 'SUPER_ADMIN' && request.user.role !== 'SUPER_ADMIN') {
-          return reply.status(403).send({ error: 'Forbidden: cannot delete a SUPER_ADMIN account' });
-        }
-        const success = await userService.deleteUser(request.params.id);
-        if (!success) {
-          return reply.status(404).send({ error: "User not found" });
-        }
-        return reply.status(204).send();
-      } catch (error: any) {
-        return reply.status(400).send({ error: error.message });
+      const target = await userService.getUserById(request.params.id);
+      if (!target) {
+        return reply.status(404).send({ error: "User not found" });
       }
+      if (target.role === 'SUPER_ADMIN' && request.user.role !== 'SUPER_ADMIN') {
+        return reply.status(403).send({ error: 'Forbidden: cannot delete a SUPER_ADMIN account' });
+      }
+      const success = await userService.deleteUser(request.params.id);
+      if (!success) {
+        return reply.status(404).send({ error: "User not found" });
+      }
+      return reply.status(204).send();
     }
   );
 
@@ -235,12 +175,8 @@ export const userRoutes: FastifyPluginAsyncZod = async (app) => {
       },
     },
     async (request, reply) => {
-      try {
-        const users = await userService.getUsersByRole(request.params.role);
-        return reply.send(users);
-      } catch (error: any) {
-        return reply.status(400).send({ error: error.message });
-      }
+      const users = await userService.getUsersByRole(request.params.role);
+      return reply.send(users);
     }
   );
 
@@ -251,12 +187,8 @@ export const userRoutes: FastifyPluginAsyncZod = async (app) => {
       preHandler: [requireRole(["ADMIN", "SUPER_ADMIN"])],
     },
     async (request, reply) => {
-      try {
-        const stats = await userService.getUserStats();
-        return reply.send(stats);
-      } catch (error: any) {
-        return reply.status(400).send({ error: error.message });
-      }
+      const stats = await userService.getUserStats();
+      return reply.send(stats);
     }
   );
 
@@ -273,15 +205,11 @@ export const userRoutes: FastifyPluginAsyncZod = async (app) => {
       },
     },
     async (request, reply) => {
-      try {
-        const available = await userService.isEmailAvailable(
-          request.query.email,
-          request.query.excludeId
-        );
-        return reply.send({ available });
-      } catch (error: any) {
-        return reply.status(400).send({ error: error.message });
-      }
+      const available = await userService.isEmailAvailable(
+        request.query.email,
+        request.query.excludeId
+      );
+      return reply.send({ available });
     }
   );
 };

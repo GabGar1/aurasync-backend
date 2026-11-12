@@ -5,7 +5,12 @@ import { orderService } from '../services/order.service.js';
 export const webhookRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post(
     '/nuvemshop',
-    { preHandler: [verifyNuvemshopWebhook], bodyLimit: 1024 * 1024 },
+    {
+      preHandler: [verifyNuvemshopWebhook],
+      bodyLimit: 1024 * 1024,
+      // Deliveries are authenticated by HMAC; throttling them makes Nuvemshop retry and eventually disable the webhook.
+      config: { rateLimit: false },
+    },
     async (request, reply) => {
       const event = request.headers['x-webhook-event'] as string;
 

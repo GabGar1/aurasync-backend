@@ -18,10 +18,6 @@ export const costClosingRoutes: FastifyPluginAsyncZod = async (fastify) => {
       }),
     },
   }, async (request, reply) => {
-    try {
-      return reply.send(await costClosingService.closeMonth(request.body));
-    } catch (error: any) {
-      return reply.code(400).send({ error: error.message });
-    }
+    return reply.send(await costClosingService.closeMonth(request.body));
   });
 };

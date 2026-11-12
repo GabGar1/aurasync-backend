@@ -12,6 +12,7 @@ import { db } from "../lib/db.js";
 import rateLimit from "@fastify/rate-limit";
 import helmet from "@fastify/helmet";
 import { closeDatabase } from "../test/setup.js";
+import { errorHandler } from "../lib/error-handler.js";
 
 after(async () => {
   await closeDatabase();
@@ -156,10 +157,7 @@ describe("Security: error leakage", () => {
         reply.status(401).send({ error: "Token ausente ou inválido!" });
       }
     });
-    app.setErrorHandler((error, _request, reply) => {
-      app.log.error(error);
-      return reply.status(500).send({ error: 'Internal server error' });
-    });
+    app.setErrorHandler(errorHandler);
     app.get('/boom', async () => {
       throw new Error('db-password-here');
     });
@@ -219,6 +217,34 @@ describe("Security: SUPER_ADMIN protection", () => {
       headers: { authorization: `Bearer ${adminToken}` },
     });
     assert.strictEqual(res.statusCode, 403);
+  });
+});
+
+describe("Security: webhook is exempt from the global rate limit", () => {
+  let app: FastifyInstance;
+
+  before(async () => {
+    app = Fastify();
+    app.setErrorHandler(errorHandler);
+    await app.register(rateLimit, { global: true, max: 1, timeWindow: "1 minute" });
+    const { webhookRoutes } = await import("./webhook.router.js");
+    await app.register(webhookRoutes, { prefix: "/api/webhooks" });
+  });
+
+  after(async () => {
+    await app.close();
+  });
+
+  it("never answers 429 to Nuvemshop deliveries (signature check still applies)", async () => {
+    for (let i = 0; i < 3; i++) {
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/webhooks/nuvemshop",
+        headers: { "content-type": "application/json" },
+        payload: { id: 1 },
+      });
+      assert.notStrictEqual(res.statusCode, 429);
+    }
   });
 });
 

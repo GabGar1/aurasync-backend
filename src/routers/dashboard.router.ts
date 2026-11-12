@@ -21,12 +21,8 @@ export const dashboardRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async (_request, reply) => {
-      try {
-        const data = await dashboardService.getStockStats();
-        return reply.send(DashboardStockResponse.parse(data));
-      } catch (error: any) {
-        return reply.status(500).send({ error: error.message });
-      }
+      const data = await dashboardService.getStockStats();
+      return reply.send(DashboardStockResponse.parse(data));
     }
   );
 
@@ -44,21 +40,17 @@ export const dashboardRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async (request, reply) => {
-      try {
-        const { days, start_date, end_date } = request.query as {
-          days: number;
-          start_date?: string;
-          end_date?: string;
-        };
-        const dates = {
-          ...(start_date ? { start_date } : {}),
-          ...(end_date ? { end_date } : {}),
-        };
-        const data = await dashboardService.getMarketingStats(days, dates);
-        return reply.send(DashboardMarketingResponse.parse(data));
-      } catch (error: any) {
-        return reply.status(500).send({ error: error.message });
-      }
+      const { days, start_date, end_date } = request.query as {
+        days: number;
+        start_date?: string;
+        end_date?: string;
+      };
+      const dates = {
+        ...(start_date ? { start_date } : {}),
+        ...(end_date ? { end_date } : {}),
+      };
+      const data = await dashboardService.getMarketingStats(days, dates);
+      return reply.send(DashboardMarketingResponse.parse(data));
     }
   );
 
@@ -76,21 +68,17 @@ export const dashboardRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async (request, reply) => {
-      try {
-        const { days, start_date, end_date } = request.query as {
-          days: number;
-          start_date?: string;
-          end_date?: string;
-        };
-        const dates = {
-          ...(start_date ? { start_date } : {}),
-          ...(end_date ? { end_date } : {}),
-        };
-        const data = await dashboardService.getOrdersStats(days, dates);
-        return reply.send(DashboardOrdersResponse.parse(data));
-      } catch (error: any) {
-        return reply.status(500).send({ error: error.message });
-      }
+      const { days, start_date, end_date } = request.query as {
+        days: number;
+        start_date?: string;
+        end_date?: string;
+      };
+      const dates = {
+        ...(start_date ? { start_date } : {}),
+        ...(end_date ? { end_date } : {}),
+      };
+      const data = await dashboardService.getOrdersStats(days, dates);
+      return reply.send(DashboardOrdersResponse.parse(data));
     }
   );
 };

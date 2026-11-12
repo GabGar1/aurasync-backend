@@ -1,4 +1,5 @@
 import { db } from "../lib/db.js";
+import { BadRequestError } from '../lib/errors.js';
 
 const STORE_TZ_OFFSET = "-03:00"; // America/Sao_Paulo (sem DST desde 2019)
 
@@ -31,7 +32,7 @@ export class DashboardRepository {
       const start = localDateToUtc(startDate);
       const end = localDateToUtc(endDate, true);
       if (end < start) {
-        throw new Error("end_date cannot be before start_date");
+        throw new BadRequestError("end_date cannot be before start_date");
       }
       return { start, end };
     }

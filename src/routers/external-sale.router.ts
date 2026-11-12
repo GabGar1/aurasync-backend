@@ -6,6 +6,7 @@ import { ExternalSaleSchema } from '../schemas/external-sale.schema.js';
 import { requireRole } from "../middlewares/role.middleware.js";
 import { csrfProtection } from "../middlewares/csrf.middleware.js";
 import { z } from "zod";
+import { clampLimit, clampPage } from "../lib/config.js";
 
 export const externalSaleRoutes: FastifyPluginAsyncZod = async (fastify) => {
   fastify.addHook('preHandler', csrfProtection());
@@ -15,12 +16,8 @@ export const externalSaleRoutes: FastifyPluginAsyncZod = async (fastify) => {
     preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])],
     schema: { body: ExternalSaleSchema.create },
   }, async (request, reply) => {
-    try {
-      const order = await externalSaleService.createExternalSale(request.body);
-      return reply.code(201).send(order);
-    } catch (error: any) {
-      return reply.code(400).send({ error: error.message });
-    }
+    const order = await externalSaleService.createExternalSale(request.body);
+    return reply.code(201).send(order);
   });
 
   fastify.get('/products', {
@@ -34,15 +31,11 @@ export const externalSaleRoutes: FastifyPluginAsyncZod = async (fastify) => {
       }),
     },
   }, async (request, reply) => {
-    try {
-      const { page, limit, search } = request.query;
-      const filters: { search?: string } = {};
-      if (search !== undefined) filters.search = search;
-      const result = await productService.getProducts(page ?? 1, limit ?? 20, filters);
-      return reply.send(result);
-    } catch (error: any) {
-      return reply.code(400).send({ error: error.message });
-    }
+    const { page, limit, search } = request.query;
+    const filters: { search?: string } = {};
+    if (search !== undefined) filters.search = search;
+    const result = await productService.getProducts(clampPage(page), clampLimit(limit, 20), filters);
+    return reply.send(result);
   });
 
   fastify.get('/customers', {
@@ -56,14 +49,10 @@ export const externalSaleRoutes: FastifyPluginAsyncZod = async (fastify) => {
       }),
     },
   }, async (request, reply) => {
-    try {
-      const { page, limit, search } = request.query;
-      const filters: { search?: string } = {};
-      if (search !== undefined) filters.search = search;
-      const result = await customerService.listCustomers(page ?? 1, limit ?? 20, filters);
-      return reply.send(result);
-    } catch (error: any) {
-      return reply.code(400).send({ error: error.message });
-    }
+    const { page, limit, search } = request.query;
+    const filters: { search?: string } = {};
+    if (search !== undefined) filters.search = search;
+    const result = await customerService.listCustomers(clampPage(page), clampLimit(limit, 20), filters);
+    return reply.send(result);
   });
 };
