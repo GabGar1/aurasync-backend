@@ -9,11 +9,13 @@ import { clampLimit, clampPage } from "../lib/config.js";
 
 declare module "@fastify/jwt" {
   interface FastifyJWT {
-    payload: { sub: string; role: string; name: string };
+    /** tv = users.token_version at sign time; bumping it revokes the token. */
+    payload: { sub: string; role: string; name: string; tv?: number };
     user: {
       sub: string;
       role: string;
       name: string;
+      tv?: number;
     };
   }
 }
@@ -107,7 +109,7 @@ export const userRoutes: FastifyPluginAsyncZod = async (app) => {
       if (request.body.role !== undefined && request.user.role !== 'SUPER_ADMIN') {
         return reply.status(403).send({ error: 'Only SUPER_ADMIN can change user roles' });
       }
-      const user = await userService.updateUser(request.params.id, request.body);
+      const user = await userService.updateUser(request.params.id, request.body, request.user.sub);
       if (!user) {
         return reply.status(404).send({ error: "User not found" });
       }
@@ -115,8 +117,10 @@ export const userRoutes: FastifyPluginAsyncZod = async (app) => {
     }
   );
 
-  app.put(
-    "/users/:id/password",
+  // Admin reset: no current password needed; every session of the target is revoked.
+  // Users change their own password through PUT /api/auth/me/password.
+  app.post(
+    "/users/:id/reset-password",
     {
       onRequest: [app.authenticate],
       preHandler: [requireRole(["ADMIN", "SUPER_ADMIN"])],
@@ -124,15 +128,19 @@ export const userRoutes: FastifyPluginAsyncZod = async (app) => {
         params: z.object({
           id: z.string().uuid(),
         }),
-        body: UserSchema.changePassword,
+        body: UserSchema.resetPassword,
       },
     },
     async (request, reply) => {
-      const success = await userService.changePassword(request.params.id, request.body);
-      if (!success) {
-        return reply.status(400).send({ error: "Failed to change password" });
+      const target = await userService.getUserById(request.params.id);
+      if (!target) {
+        return reply.status(404).send({ error: "User not found" });
       }
-      return reply.send({ message: "Password changed successfully" });
+      if (target.role === 'SUPER_ADMIN' && request.user.role !== 'SUPER_ADMIN') {
+        return reply.status(403).send({ error: 'Forbidden: cannot modify a SUPER_ADMIN account' });
+      }
+      await userService.resetPassword(request.params.id, request.body.new_password);
+      return reply.send({ message: "Password reset successfully" });
     }
   );
 
@@ -155,7 +163,7 @@ export const userRoutes: FastifyPluginAsyncZod = async (app) => {
       if (target.role === 'SUPER_ADMIN' && request.user.role !== 'SUPER_ADMIN') {
         return reply.status(403).send({ error: 'Forbidden: cannot delete a SUPER_ADMIN account' });
       }
-      const success = await userService.deleteUser(request.params.id);
+      const success = await userService.deleteUser(request.params.id, request.user.sub);
       if (!success) {
         return reply.status(404).send({ error: "User not found" });
       }

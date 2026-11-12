@@ -11,11 +11,14 @@ export function parseCookies(cookieHeader: string | undefined): Record<string, s
   return cookies;
 }
 
-export function isAuthenticatedUpgrade(cookieHeader: string | undefined, verify: (token: string) => boolean): boolean {
+export async function isAuthenticatedUpgrade(
+  cookieHeader: string | undefined,
+  verify: (token: string) => boolean | Promise<boolean>
+): Promise<boolean> {
   const token = parseCookies(cookieHeader)['aurasync_token'];
   if (!token) return false;
   try {
-    return verify(token);
+    return await verify(token);
   } catch {
     return false;
   }

@@ -18,12 +18,6 @@ after(async () => {
   await closeDatabase();
 });
 
-declare module "@fastify/jwt" {
-  interface FastifyJWT {
-    payload: { sub: string; role: string; name: string };
-    user: { sub: string; role: string; name: string };
-  }
-}
 
 const buildApp = async (): Promise<FastifyInstance> => {
   const app = Fastify();

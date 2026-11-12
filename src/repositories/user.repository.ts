@@ -12,6 +12,14 @@ export interface User {
   created_at: Date;
   updated_at: Date;
   status: boolean;
+  token_version: number;
+}
+
+/** What `authenticate` needs to accept a token: only live (not deleted) users have one. */
+export interface UserAuthState {
+  role: string;
+  status: boolean;
+  token_version: number;
 }
 
 export interface CreateUserInput {
@@ -134,16 +142,39 @@ export class UserRepository {
     };
   }
 
+  /** Also bumps token_version, so every existing session of the user is revoked. */
   async updatePassword(id: string, passwordHash: string): Promise<boolean> {
     const result = await db(this.tableName)
       .where({ id })
       .whereNull('deleted_at')
       .update({
         password_hash: passwordHash,
+        token_version: db.raw('token_version + 1'),
         updated_at: new Date(),
       });
-    
+
     return result > 0;
+  }
+
+  async getAuthState(id: string): Promise<UserAuthState | null> {
+    const row = await db(this.tableName)
+      .where({ id })
+      .whereNull('deleted_at')
+      .first('role', 'status', 'token_version');
+    return row ?? null;
+  }
+
+  async incrementTokenVersion(id: string): Promise<void> {
+    await db(this.tableName).where({ id }).increment('token_version', 1);
+  }
+
+  async countActiveSuperAdmins(): Promise<number> {
+    const row = await db(this.tableName)
+      .where({ role: 'SUPER_ADMIN', status: true })
+      .whereNull('deleted_at')
+      .count('* as count')
+      .first();
+    return Number(row?.count ?? 0);
   }
 
   async emailExists(email: string, excludeId?: string): Promise<boolean> {

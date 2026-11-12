@@ -40,6 +40,10 @@ export const UserSchema = {
     new_password: z.string().min(8, 'New password must be at least 8 characters'),
   }),
 
+  resetPassword: z.object({
+    new_password: z.string().min(8, 'New password must be at least 8 characters'),
+  }),
+
   response: z.object({
     id: z.uuid(),
     email: z.email(),

@@ -19,12 +19,6 @@ const testEmails = [
   "role.admin.update.target@aurasync.com",
 ];
 
-declare module "@fastify/jwt" {
-  interface FastifyJWT {
-    payload: { sub: string; role: string; name: string };
-    user: { sub: string; role: string; name: string };
-  }
-}
 
 const buildApp = async (): Promise<FastifyInstance> => {
   const app = Fastify();
@@ -143,32 +137,32 @@ describe("User Router Auth", () => {
     });
   });
 
-  describe("PUT /users/:id/password — change password", () => {
+  describe("POST /users/:id/reset-password — admin password reset", () => {
     it("should return 401 without token", async () => {
       const res = await app.inject({
-        method: "PUT",
-        url: `/api/users/${testUserId}/password`,
-        body: { current_password: "x", new_password: "y" },
+        method: "POST",
+        url: `/api/users/${testUserId}/reset-password`,
+        body: { new_password: "NewPassword456@" },
       });
       assert.strictEqual(res.statusCode, 401);
     });
 
     it("should return 403 for EMPLOYEE role", async () => {
       const res = await app.inject({
-        method: "PUT",
-        url: `/api/users/${testUserId}/password`,
+        method: "POST",
+        url: `/api/users/${testUserId}/reset-password`,
         headers: { authorization: `Bearer ${employeeToken}` },
-        body: { current_password: "TestPassword123!", new_password: "NewPassword456@" },
+        body: { new_password: "NewPassword456@" },
       });
       assert.strictEqual(res.statusCode, 403);
     });
 
-    it("should return 200 for ADMIN role", async () => {
+    it("should return 200 for ADMIN role without the target's current password", async () => {
       const res = await app.inject({
-        method: "PUT",
-        url: `/api/users/${testUserId}/password`,
+        method: "POST",
+        url: `/api/users/${testUserId}/reset-password`,
         headers: { authorization: `Bearer ${adminToken}` },
-        body: { current_password: "TestPassword123!", new_password: "NewPassword456@" },
+        body: { new_password: "NewPassword456@" },
       });
       assert.strictEqual(res.statusCode, 200);
     });

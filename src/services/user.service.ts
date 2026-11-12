@@ -14,8 +14,9 @@ export class UserService {
     return bcrypt.compare(password, hash);
   }
 
-  private sanitizeUser(user: User): Omit<User, 'password_hash'> & { first_name: string; last_name: string } {
-    const { password_hash, ...sanitizedUser } = user;
+  private sanitizeUser(user: User): Omit<User, 'password_hash' | 'token_version'> & { first_name: string; last_name: string } {
+    // Credentials and session internals never leave the service.
+    const { password_hash: _hash, token_version: _tv, ...sanitizedUser } = user;
     
     const first_name = user.first_name;
     const last_name = user.last_name;
@@ -27,7 +28,7 @@ export class UserService {
     };
   }
 
-  async createUser(userData: UserRegister): Promise<Omit<User, 'password_hash'> & { first_name: string; last_name: string }> {
+  async createUser(userData: UserRegister): Promise<Omit<User, 'password_hash' | 'token_version'> & { first_name: string; last_name: string }> {
     const validatedData = UserSchema.register.parse(userData);
 
     const existingUser = await userRepository.findByEmail(validatedData.email);
@@ -50,7 +51,7 @@ export class UserService {
     return this.sanitizeUser(user);
   }
 
-  async authenticateUser(credentials: UserLogin): Promise<Omit<User, 'password_hash'> & { first_name: string; last_name: string } | null> {
+  async authenticateUser(credentials: UserLogin): Promise<Omit<User, 'password_hash' | 'token_version'> & { first_name: string; last_name: string } | null> {
     const validatedCredentials = UserSchema.login.parse(credentials);
 
     const user = await userRepository.findByEmail(validatedCredentials.email);
@@ -70,18 +71,38 @@ export class UserService {
     return this.sanitizeUser(user);
   }
 
-  async getUserById(id: string): Promise<Omit<User, 'password_hash'> & { first_name: string; last_name: string } | null> {
+  async getUserById(id: string): Promise<Omit<User, 'password_hash' | 'token_version'> & { first_name: string; last_name: string } | null> {
     const user = await userRepository.findById(id);
     return user ? this.sanitizeUser(user) : null;
   }
 
-  async updateUser(id: string, userData: UserUpdate): Promise<Omit<User, 'password_hash'> & { first_name: string; last_name: string } | null> {
+  /**
+   * Refuses changes that would leave the system without an active SUPER_ADMIN.
+   * `remainsSuperAdmin` describes the target after the change.
+   */
+  private async assertNotLastSuperAdmin(target: User, remainsSuperAdmin: boolean): Promise<void> {
+    const isActiveSuperAdmin = target.role === 'SUPER_ADMIN' && target.status;
+    if (!isActiveSuperAdmin || remainsSuperAdmin) return;
+    if ((await userRepository.countActiveSuperAdmins()) <= 1) {
+      throw new ConflictError('Cannot remove the last active SUPER_ADMIN');
+    }
+  }
+
+  /** @param actorId the user performing the change, when it comes from the API */
+  async updateUser(id: string, userData: UserUpdate, actorId?: string): Promise<Omit<User, 'password_hash' | 'token_version'> & { first_name: string; last_name: string } | null> {
     const validatedData = UserSchema.update.parse(userData);
 
     const existingUser = await userRepository.findById(id);
     if (!existingUser) {
       throw new NotFoundError('User not found');
     }
+
+    if (actorId === id && validatedData.status === false) {
+      throw new BadRequestError('You cannot deactivate your own account');
+    }
+    const nextRole = validatedData.role ?? existingUser.role;
+    const nextStatus = validatedData.status ?? existingUser.status;
+    await this.assertNotLastSuperAdmin(existingUser, nextRole === 'SUPER_ADMIN' && nextStatus);
 
     const updateData: UpdateUserInput = {};
 
@@ -123,11 +144,35 @@ export class UserService {
     return userRepository.updatePassword(id, newPasswordHash);
   }
 
-  async deleteUser(id: string): Promise<boolean> {
+  /** Admin reset: no current password; revokes every session of the user. */
+  async resetPassword(id: string, newPassword: string): Promise<boolean> {
+    const { new_password } = UserSchema.resetPassword.parse({ new_password: newPassword });
     const user = await userRepository.findById(id);
     if (!user) {
       throw new NotFoundError('User not found');
     }
+    return userRepository.updatePassword(id, await this.hashPassword(new_password));
+  }
+
+  async getAuthState(id: string) {
+    return userRepository.getAuthState(id);
+  }
+
+  /** Invalidates every token issued so far for the user (logout). */
+  async revokeSessions(id: string): Promise<void> {
+    await userRepository.incrementTokenVersion(id);
+  }
+
+  /** @param actorId the user performing the deletion, when it comes from the API */
+  async deleteUser(id: string, actorId?: string): Promise<boolean> {
+    const user = await userRepository.findById(id);
+    if (!user) {
+      throw new NotFoundError('User not found');
+    }
+    if (actorId === id) {
+      throw new BadRequestError('You cannot delete your own account');
+    }
+    await this.assertNotLastSuperAdmin(user, false);
 
     return userRepository.delete(id);
   }
@@ -140,7 +185,7 @@ export class UserService {
       search?: string;
     } = {}
   ): Promise<{
-    users: (Omit<User, 'password_hash'> & { first_name: string; last_name: string })[];
+    users: (Omit<User, 'password_hash' | 'token_version'> & { first_name: string; last_name: string })[];
     total: number;
     page: number;
     limit: number;
@@ -149,11 +194,11 @@ export class UserService {
     
     return {
       ...result,
-       users: result.users.map(user => this.sanitizeUser(user)) as Array<Omit<User, 'password_hash'> & { first_name: string; last_name: string }>,
+       users: result.users.map(user => this.sanitizeUser(user)) as Array<Omit<User, 'password_hash' | 'token_version'> & { first_name: string; last_name: string }>,
     };
   }
 
-  async getUsersByRole(role: string): Promise<(Omit<User, 'password_hash'> & { first_name: string; last_name: string })[]> {
+  async getUsersByRole(role: string): Promise<(Omit<User, 'password_hash' | 'token_version'> & { first_name: string; last_name: string })[]> {
     const users = await userRepository.getUsersByRole(role);
     return users.map(user => this.sanitizeUser(user));
   }

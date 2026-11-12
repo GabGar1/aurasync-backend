@@ -1,6 +1,8 @@
 import 'dotenv/config';
 import { assertSecureConfig, isProduction, parseAllowedOrigins, resolveHost, resolveRateLimit, resolveTrustProxy, shouldExposeDocs } from "./lib/config.js";
 import { errorHandler } from "./lib/error-handler.js";
+import { authenticate } from "./lib/authenticate.js";
+import { userService } from "./services/user.service.js";
 import Fastify, {type FastifyReply, type FastifyRequest} from "fastify";
 import {jsonSchemaTransform, serializerCompiler, validatorCompiler} from "fastify-type-provider-zod";
 import { websocketManager } from "./lib/websocket.js";
@@ -77,13 +79,7 @@ app.register(fastifyJwt, {
   cookie: { cookieName: 'aurasync_token', signed: false },
 });
 
-app.decorate("authenticate", async (request: FastifyRequest, reply: FastifyReply) => {
-  try {
-    await request.jwtVerify();
-  } catch (err) {
-    reply.status(401).send({ error: "Token ausente ou inválido!" });
-  }
-});
+app.decorate("authenticate", authenticate);
 
 app.setErrorHandler(errorHandler);
 
@@ -134,19 +130,13 @@ const start = async () => {
 
     const wss = new WebSocketServer({
       server: app.server,
+      // Same rules as the HTTP guard: valid signature AND a live, non-revoked session.
       verifyClient: (info, cb) => {
-        const ok = isAuthenticatedUpgrade(
-          info.req.headers.cookie,
-          (token) => {
-            app.jwt.verify(token);
-            return true;
-          }
-        );
-        if (!ok) {
-          cb(false, 401, 'Unauthorized');
-          return;
-        }
-        cb(true);
+        isAuthenticatedUpgrade(info.req.headers.cookie, async (token) => {
+          const payload = app.jwt.verify<{ sub: string; tv?: number }>(token);
+          const state = await userService.getAuthState(payload.sub);
+          return !!state && state.status && (payload.tv ?? 0) === state.token_version;
+        }).then((ok) => (ok ? cb(true) : cb(false, 401, 'Unauthorized')));
       },
     });
 

@@ -9,12 +9,6 @@ import { orderRoutes } from "./order.router.js";
 import { productService } from "../services/product.service.js";
 import { cleanupDatabase, closeDatabase } from "../test/setup.js";
 
-declare module "@fastify/jwt" {
-  interface FastifyJWT {
-    payload: { sub: string; role: string; name: string };
-    user: { sub: string; role: string; name: string };
-  }
-}
 
 const buildApp = async (): Promise<FastifyInstance> => {
   const app = Fastify();
