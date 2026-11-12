@@ -1,7 +1,7 @@
 import { costClosingRepository } from '../repositories/cost-closing.repository.js';
 import { computeMonthlyAllocations } from '../lib/monthly-cost-engine.js';
 import { z } from 'zod';
-import { BadRequestError } from '../lib/errors.js';
+import { BadRequestError, ConflictError } from '../lib/errors.js';
 
 const CloseMonthSchema = z.object({
   month: z.string().regex(/^\d{4}-\d{2}$/).optional(),
@@ -36,6 +36,12 @@ export class CostClosingService {
     }
 
     const { start, end } = resolvePeriod(v);
+
+    // A different closing over part of the same days would allocate the monthly costs twice.
+    const overlap = await costClosingRepository.findOverlappingPeriod(start, end);
+    if (overlap) {
+      throw new ConflictError('This period overlaps a closing already made for other dates');
+    }
 
     const components = await costClosingRepository.listMonthlyComponents(start, end);
     const agg = await costClosingRepository.aggregateOrders(start, end);

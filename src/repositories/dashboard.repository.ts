@@ -1,12 +1,6 @@
 import { db } from "../lib/db.js";
 import { BadRequestError } from '../lib/errors.js';
-
-const STORE_TZ_OFFSET = "-03:00"; // America/Sao_Paulo (sem DST desde 2019)
-
-function localDateToUtc(dateStr: string, endOfDay = false): Date {
-  const time = endOfDay ? "23:59:59.999" : "00:00:00";
-  return new Date(`${dateStr}T${time}${STORE_TZ_OFFSET}`);
-}
+import { localDateToUtc } from '../lib/store-time.js';
 
 const NEGATIVE_STATUSES = ["CANCELED", "cancelled"];
 const NEGATIVE_PAYMENT_STATUSES = ["voided", "refunded", "cancelled"];
@@ -57,29 +51,45 @@ export class DashboardRepository {
       .orderBy("product_variants.stock_quantity", "asc");
   }
 
-  async getNoSales30d(days: number) {
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - days);
+  /**
+   * Variants with stock and no valid sale in the last `days`, with how long since their
+   * last sale (or since they were created, if they never sold). One query serves both
+   * "sem vendas" and "estoque parado".
+   */
+  private variantsWithoutSales(days: number) {
+    const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
+    const salesOfVariant = () =>
+      validOrderFilter(
+        db("order_items")
+          .join("orders", "orders.id", "order_items.order_id")
+          .whereRaw("order_items.variant_id = product_variants.id")
+          .where("order_items.status", true)
+      );
+
+    // NOT EXISTS (not NOT IN): a NULL variant_id in order_items would make NOT IN match nothing.
     return db("product_variants")
       .join("products", "products.id", "product_variants.product_id")
       .where("product_variants.stock_quantity", ">", 0)
       .whereNull("product_variants.deleted_at")
       .whereNull("products.deleted_at")
-      .whereNotIn("product_variants.id", function (this: any) {
-        validOrderFilter(
-          this.select("order_items.variant_id")
-            .from("order_items")
-            .join("orders", "orders.id", "order_items.order_id")
-            .where("orders.created_at", ">=", cutoff)
-        );
-      })
+      .whereNotExists(salesOfVariant().where("orders.created_at", ">=", cutoff).select(db.raw("1")))
       .select(
         "products.id as product_id",
         "products.name as product_name",
         "product_variants.name as variant_name",
-        "product_variants.stock_quantity as stock"
-      );
+        "product_variants.stock_quantity as stock",
+        // Last sale, not product_variants.updated_at (which changes on every Nuvemshop sync).
+        db.raw(
+          "EXTRACT(DAY FROM NOW() - COALESCE((?), product_variants.created_at))::int as days_without_sale",
+          [salesOfVariant().max("orders.created_at")]
+        )
+      )
+      .orderBy("days_without_sale", "desc");
+  }
+
+  async getNoSales30d(days: number) {
+    return this.variantsWithoutSales(days);
   }
 
   async getTurnoverRate(days: number) {
@@ -133,32 +143,7 @@ export class DashboardRepository {
   }
 
   async getDeadStock(days: number) {
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - days);
-
-    return db("product_variants")
-      .join("products", "products.id", "product_variants.product_id")
-      .where("product_variants.stock_quantity", ">", 0)
-      .whereNull("product_variants.deleted_at")
-      .whereNull("products.deleted_at")
-      .whereNotIn("product_variants.id", function (this: any) {
-        validOrderFilter(
-          this.select("order_items.variant_id")
-            .from("order_items")
-            .join("orders", "orders.id", "order_items.order_id")
-            .where("orders.created_at", ">=", cutoff)
-        );
-      })
-      .select(
-        "products.id as product_id",
-        "products.name as product_name",
-        "product_variants.name as variant_name",
-        "product_variants.stock_quantity as stock",
-        db.raw(
-          "EXTRACT(DAY FROM NOW() - product_variants.updated_at)::int as days_without_sale"
-        )
-      )
-      .orderBy("days_without_sale", "desc");
+    return this.variantsWithoutSales(days);
   }
 
   async getMarketingStats(days = 30, dates: { start_date?: string; end_date?: string } = {}) {
@@ -322,15 +307,19 @@ export class DashboardRepository {
       )
       .first();
 
-    const repeatRow = await validOrderFilter(
+    // Count the customers with more than one order (not the orders of the first such customer).
+    const repeatCustomers = validOrderFilter(
       db("orders")
         .where("orders.created_at", ">=", start)
         .andWhere("orders.created_at", "<=", end)
         .whereNotNull("customer_email")
         .groupBy("customer_email")
         .havingRaw("COUNT(*) > 1")
-        .select(db.raw("COUNT(*)::int as repeat_customers"))
-    ).first();
+        .select("customer_email")
+    ).as("repeaters");
+    const repeatRow = (await db.from(repeatCustomers).select(db.raw("COUNT(*)::int as repeat_customers")).first()) as
+      | { repeat_customers: number }
+      | undefined;
 
     const unique = customerStats?.unique_customers ?? 0;
     const repeat = repeatRow?.repeat_customers ?? 0;

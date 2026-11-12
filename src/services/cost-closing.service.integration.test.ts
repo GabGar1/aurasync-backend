@@ -79,4 +79,47 @@ describe("CostClosingService Integration Tests", () => {
       assert.strictEqual(Number(order.monthly_cost_total), 0);
     }
   });
+
+  it("uses the store's local day for the month boundaries, like the dashboard (B12)", async () => {
+    await costService.createComponent({
+      name: "Equipe TZ", type: "MONTHLY_FIXED", value: 900, allocation_basis: "PER_ORDER",
+    } as any);
+    // 2026-08-01T02:30Z = 31/07/2026 23:30 in America/Sao_Paulo: a July sale.
+    const [lateJuly] = await db('orders').insert({
+      customer_name: 'Late July', status: 'PAID', total_amount: 100, source: 'EXTERNAL', created_at: new Date('2026-08-01T02:30:00Z'),
+    }).returning('*');
+    // 2026-09-01T01:00Z = 31/08/2026 22:00 local: still an August sale.
+    const [lateAugust] = await db('orders').insert({
+      customer_name: 'Late August', status: 'PAID', total_amount: 100, source: 'EXTERNAL', created_at: new Date('2026-09-01T01:00:00Z'),
+    }).returning('*');
+
+    const july = await costClosingService.closeMonth({ month: '2026-07' });
+    const august = await costClosingService.closeMonth({ month: '2026-08' });
+
+    assert.strictEqual(july.orders, 1);
+    assert.strictEqual(august.orders, 1);
+    assert.strictEqual(Number((await db('orders').where({ id: lateJuly.id }).first()).monthly_cost_total), 900);
+    assert.strictEqual(Number((await db('orders').where({ id: lateAugust.id }).first()).monthly_cost_total), 900);
+  });
+
+  it("refuses a closing that overlaps a different period already closed (B12)", async () => {
+    await costService.createComponent({
+      name: "Equipe Overlap", type: "MONTHLY_FIXED", value: 1000, allocation_basis: "PER_ORDER",
+    } as any);
+    const [o] = await db('orders').insert({
+      customer_name: 'Overlap', status: 'PAID', total_amount: 100, source: 'EXTERNAL', created_at: new Date('2026-08-20T15:00:00Z'),
+    }).returning('*');
+
+    await costClosingService.closeMonth({ month: '2026-08' });
+    await assert.rejects(
+      () => costClosingService.closeMonth({ start_date: '2026-08-15', end_date: '2026-09-14' }),
+      (err: any) => err.statusCode === 409,
+    );
+
+    // Closing the same period again is still allowed (idempotent) and nothing was duplicated.
+    await costClosingService.closeMonth({ month: '2026-08' });
+    const rows = await db('order_monthly_allocations').where({ order_id: o.id });
+    assert.strictEqual(rows.length, 1);
+    assert.strictEqual(Number((await db('orders').where({ id: o.id }).first()).monthly_cost_total), 1000);
+  });
 });

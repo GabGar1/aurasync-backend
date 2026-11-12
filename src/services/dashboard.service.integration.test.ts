@@ -299,6 +299,8 @@ describe("DashboardService Integration Tests", () => {
       { id: "00000000-0000-0000-0000-000000000022", utm_campaign: null, utm_source: "ig", utm_medium: "social", total: 50 },
       { id: "00000000-0000-0000-0000-000000000023", utm_campaign: null, utm_source: "ig", utm_medium: "social", total: 30 },
       { id: "00000000-0000-0000-0000-000000000024", utm_campaign: null, utm_source: "IGShopping", utm_medium: "Social", total: 20 },
+      // Own no-UTM order: relying on another test's fixture made this test depend on the current date.
+      { id: "00000000-0000-0000-0000-000000000025", utm_campaign: null, utm_source: null, utm_medium: null, total: 10 },
     ];
     for (const r of rows) {
       await db("orders").insert({

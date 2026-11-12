@@ -70,6 +70,7 @@ Router never calls Repository. Service never builds raw Knex queries.
 - **Inventory stock update**: `inventory.repository.ts` directly mutates `product_variants.stock_quantity` for manual adjustments.
 - **Stock rule (AuraSync is the source of truth)**: order stock moves only through `stockRepository.reconcileOrderStock(trx, orderId, { strict })`, which applies the difference between what the order should hold (active items, nothing if CANCELED) and the sum of its `inventory_transactions`. Local orders/external sales are strict (400 on insufficient stock); Nuvemshop orders are not (stock may go negative = oversold). Nuvemshop orders created before the `stock_baseline` row of `integration_sync_state` never move stock. The product sync only seeds stock for new variants. Lock variants with `forNoKeyUpdate()` (FOR UPDATE deadlocks against the FK lock taken by inserting order_items).
 - **Cancelling**: `DELETE /orders/:id` cancels (status CANCELED, stock returned, order stays listed). Nuvemshop orders cannot be changed locally (409).
+- **Store time**: reports cut days/months at America/Sao_Paulo midnight. Convert local dates with `localDateToUtc` from `src/lib/store-time.ts`; never compare `created_at` with a bare `'YYYY-MM-DD'` string (that is UTC midnight). Monthly closings cannot overlap a different closed period (409).
 - **Cost engine inputs**: build them with `costRepository.buildCostEngineItems(lines, trx)`; do not re-implement the variant/component lookup.
 
 ## Git workflow
