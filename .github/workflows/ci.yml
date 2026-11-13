@@ -39,7 +39,8 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # 22+: `node --test` expands the quoted "src/**/*.test.ts" glob itself (nested folders included).
+          node-version: 22
           cache: npm
 
       - run: npm ci --no-audit --no-fund

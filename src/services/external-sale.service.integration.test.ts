@@ -57,6 +57,11 @@ describe("ExternalSaleService Integration Tests", () => {
     const variant = await db("product_variants").where({ id: variantId }).first();
     assert.strictEqual(variant.stock_quantity, 18);
 
+    // A paid sale has a payment date, so the order timeline does not show "Pago: pendente".
+    const saved = await db("orders").where({ id: order.id }).first();
+    assert.ok(saved.paid_at, "paid external sale must have paid_at");
+    assert.strictEqual(saved.shipped_at, null);
+
     const tx = await db("inventory_transactions").where({ variant_id: variantId, order_id: order.id }).first();
     assert.ok(tx);
     assert.strictEqual(tx.type, "SALE");

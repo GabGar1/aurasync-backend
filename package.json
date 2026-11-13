@@ -5,7 +5,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "NODE_ENV=test node --import tsx --test --test-concurrency=1 src/**/*.test.ts",
+    "test": "NODE_ENV=test node --import tsx --test --test-concurrency=1 \"src/**/*.test.ts\"",
     "pretest": "NODE_ENV=test node --import tsx src/test/bootstrap.ts",
     "dev": "tsx watch src/server.ts",
     "start": "tsx src/server.ts",
@@ -15,6 +15,7 @@
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",
     "db:seed": "node --import tsx src/db/seed.ts",
+    "db:seed:demo": "node --import tsx src/db/seed-demo.ts",
     "typecheck": "tsc --noEmit",
     "check": "npm run lint && npm run typecheck && npm test"
   },

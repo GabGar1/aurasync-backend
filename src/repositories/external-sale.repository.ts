@@ -34,6 +34,16 @@ export class ExternalSaleRepository {
       const grossTotal = input.items.reduce((sum, i) => sum + i.unit_price * i.quantity, 0);
       const totalAmount = grossTotal - input.discount_amount;
 
+      // The timeline reads these dates: a sale registered as paid/shipped/delivered happened now.
+      const now = new Date();
+      const reached = (...statuses: string[]) => (statuses.includes(input.status) ? now : null);
+      const milestones = {
+        paid_at: reached('PAID', 'SHIPPED', 'DELIVERED'),
+        shipped_at: reached('SHIPPED', 'DELIVERED'),
+        completed_at: reached('DELIVERED'),
+        cancelled_at: reached('CANCELED'),
+      };
+
       const [order] = await trx(this.ordersTable)
         .insert({
           customer_name: input.customer_name,
@@ -51,6 +61,7 @@ export class ExternalSaleRepository {
           total_profit: costResult.total_profit,
           margin_percent: costResult.margin_percent,
           is_fair: input.is_fair ?? false,
+          ...milestones,
         })
         .returning('*');
 
