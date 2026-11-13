@@ -9,8 +9,10 @@ describe("translateFulfillmentStatus", () => {
     assert.strictEqual(translateFulfillmentStatus("DISPATCHED"), "Despachado");
     assert.strictEqual(
       translateFulfillmentStatus("MARKED_AS_FULFILLED"),
-      "Marcado como Concluído"
+      "Marcado como concluído"
     );
+    assert.strictEqual(translateFulfillmentStatus("PACKED"), "Empacotado");
+    assert.strictEqual(translateFulfillmentStatus("packed"), "Empacotado");
     assert.strictEqual(translateFulfillmentStatus("pending"), "Pendente");
     assert.strictEqual(translateFulfillmentStatus("PENDING"), "Pendente");
     assert.strictEqual(translateFulfillmentStatus(null), "Sem status");

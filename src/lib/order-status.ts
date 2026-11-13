@@ -37,8 +37,10 @@ const FULFILLMENT_LABELS: Record<string, string> = {
   unpacked: 'Empacotando',
   DISPATCHED: 'Despachado',
   dispatched: 'Despachado',
-  MARKED_AS_FULFILLED: 'Marcado como Concluído',
-  marked_as_fulfilled: 'Marcado como Concluído',
+  MARKED_AS_FULFILLED: 'Marcado como concluído',
+  marked_as_fulfilled: 'Marcado como concluído',
+  PACKED: 'Empacotado',
+  packed: 'Empacotado',
 };
 
 export function translateOrderStatus(status: string | null | undefined): string {

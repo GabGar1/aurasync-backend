@@ -160,7 +160,7 @@ describe("DashboardService Integration Tests", () => {
     const labels: Record<string, string> = {
       UNPACKED: "Empacotando",
       DISPATCHED: "Despachado",
-      MARKED_AS_FULFILLED: "Marcado como Concluído",
+      MARKED_AS_FULFILLED: "Marcado como concluído",
       PENDING: "Pendente",
     };
     for (const [status, label] of Object.entries(labels)) {
