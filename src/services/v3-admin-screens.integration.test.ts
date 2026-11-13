@@ -68,6 +68,19 @@ describe("Credit fee tiers", () => {
   });
 });
 
+describe("Credit fee tiers on/off", () => {
+  it("keeps a deactivated tier on the list (so it can be turned back on) but stops charging it", async () => {
+    const tier = await creditFeeService.createTier({ installments: 6, percent: 12, fixed_fee: 0 });
+    await creditFeeService.updateTier(tier.id, { is_active: false });
+
+    const listed = await creditFeeService.listTiers();
+    assert.ok(listed.some((t: any) => t.id === tier.id && t.is_active === false), "inactive tier must stay listed");
+
+    const { creditFeeRepository } = await import("../repositories/credit-fee.repository.js");
+    assert.strictEqual(await creditFeeRepository.findByInstallments(6), null, "inactive tier must not be charged");
+  });
+});
+
 describe("Cost closing history", () => {
   it("lists the closed periods with order count and total allocated, newest first", async () => {
     await costService.createComponent({ name: "Equipe", type: "MONTHLY_FIXED", value: 900, allocation_basis: "PER_ORDER" } as any);

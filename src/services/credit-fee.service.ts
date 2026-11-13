@@ -4,12 +4,12 @@ import { ConflictError, NotFoundError } from '../lib/errors.js';
 
 export class CreditFeeService {
   async listTiers() {
-    return creditFeeRepository.listActive();
+    return creditFeeRepository.listAll();
   }
 
   async createTier(data: CreditFeeCreate) {
     const v = CreditFeeSchema.create.parse(data);
-    if (await creditFeeRepository.findByInstallments(v.installments)) {
+    if (await creditFeeRepository.existsForInstallments(v.installments)) {
       throw new ConflictError('A credit fee tier for this number of installments already exists');
     }
     return creditFeeRepository.create(v);
