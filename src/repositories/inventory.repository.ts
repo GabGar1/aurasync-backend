@@ -19,6 +19,12 @@ export interface CreateInventoryInput {
   quantity_changed: number;
 }
 
+export interface InventoryHistoryFilters {
+  type?: 'SALE' | 'RESTOCK' | 'ADJUSTMENT';
+  /** Product name or SKU. */
+  search?: string;
+}
+
 export class InventoryRepository {
   private table = 'inventory_transactions';
 
@@ -60,18 +66,50 @@ export class InventoryRepository {
       .orderBy('created_at', 'desc');
   }
 
-  async getAllHistory(page: number = 1, limit: number = 50): Promise<any[]> {
-    const offset = (page - 1) * limit;
-
-    return await db(this.table)
+  /**
+   * Movements with product/variant names, filtered by type and by product name or SKU,
+   * plus a summary of everything that matches (not only the current page).
+   */
+  async getAllHistory(page: number = 1, limit: number = 50, filters: InventoryHistoryFilters = {}) {
+    let query = db(this.table)
       .join('product_variants', `${this.table}.variant_id`, 'product_variants.id')
+      .join('products', 'products.id', 'product_variants.product_id');
+
+    if (filters.type) query = query.where(`${this.table}.type`, filters.type);
+    if (filters.search) {
+      const term = `%${filters.search}%`;
+      query = query.where((b) => {
+        b.where('products.name', 'ilike', term).orWhere('product_variants.sku', 'ilike', term);
+      });
+    }
+
+    const summaryRow = (await query
+      .clone()
+      .select(
+        db.raw(`COALESCE(SUM(CASE WHEN ${this.table}.quantity_changed > 0 THEN ${this.table}.quantity_changed ELSE 0 END), 0)::int as entries`),
+        db.raw(`COALESCE(SUM(CASE WHEN ${this.table}.quantity_changed < 0 THEN -${this.table}.quantity_changed ELSE 0 END), 0)::int as exits`),
+        db.raw('COUNT(*)::int as movements')
+      )
+      .first()) as { entries: number; exits: number; movements: number } | undefined;
+
+    const transactions = await query
+      .clone()
       .select(
         `${this.table}.*`,
-        'product_variants.sku as variantSku'
+        'products.name as product_name',
+        'product_variants.name as variant_name',
+        'product_variants.sku as sku'
       )
       .orderBy(`${this.table}.created_at`, 'desc')
       .limit(limit)
-      .offset(offset);
+      .offset((page - 1) * limit);
+
+    const summary = {
+      entries: Number(summaryRow?.entries ?? 0),
+      exits: Number(summaryRow?.exits ?? 0),
+      movements: Number(summaryRow?.movements ?? 0),
+    };
+    return { transactions, total: summary.movements, page, limit, summary };
   }
 }
 

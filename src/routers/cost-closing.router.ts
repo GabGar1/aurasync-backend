@@ -7,6 +7,13 @@ import { z } from "zod";
 export const costClosingRoutes: FastifyPluginAsyncZod = async (fastify) => {
   fastify.addHook('preHandler', csrfProtection());
 
+  fastify.get('/', {
+    onRequest: [fastify.authenticate],
+    preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])],
+  }, async (_request, reply) => {
+    return reply.send(await costClosingService.listClosings());
+  });
+
   fastify.post('/', {
     onRequest: [fastify.authenticate],
     preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])],

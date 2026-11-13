@@ -17,6 +17,11 @@ export class CreditFeeRepository {
     return (await query(this.table).where({ installments: n }).whereNull('deleted_at').first()) || null;
   }
 
+  async create(data: { installments: number; percent: number; fixed_fee: number }) {
+    const [row] = await db(this.table).insert(data).returning('*');
+    return row;
+  }
+
   async update(id: string, data: { percent?: number | undefined; fixed_fee?: number | undefined; is_active?: boolean | undefined }) {
     const [row] = await db(this.table)
       .where({ id }).whereNull('deleted_at')

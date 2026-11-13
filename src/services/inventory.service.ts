@@ -1,5 +1,5 @@
 import { BadRequestError } from '../lib/errors.js';
-import { inventoryRepository, type CreateInventoryInput } from '../repositories/inventory.repository.js';
+import { inventoryRepository, type CreateInventoryInput, type InventoryHistoryFilters } from '../repositories/inventory.repository.js';
 import { InventorySchema, type InventoryCreate } from '../schemas/inventory.schema.js';
 
 export class InventoryService {
@@ -34,8 +34,8 @@ export class InventoryService {
     return await inventoryRepository.getHistoryByVariantId(variantId);
   }
 
-  async getGlobalHistory(page: number = 1, limit: number = 50) {
-    return await inventoryRepository.getAllHistory(page, limit);
+  async getGlobalHistory(page: number = 1, limit: number = 50, filters: InventoryHistoryFilters = {}) {
+    return await inventoryRepository.getAllHistory(page, limit, filters);
   }
 }
 

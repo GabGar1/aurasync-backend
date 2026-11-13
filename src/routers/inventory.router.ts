@@ -23,12 +23,20 @@ export const inventoryRoutes: FastifyPluginAsyncZod = async (fastify) => {
 
   fastify.get('/', {
     onRequest: [fastify.authenticate],
-    schema: { querystring: z.object({ page: z.coerce.number().optional(), limit: z.coerce.number().optional() }) }
+    schema: {
+      querystring: z.object({
+        page: z.coerce.number().optional(),
+        limit: z.coerce.number().optional(),
+        type: z.enum(['SALE', 'RESTOCK', 'ADJUSTMENT']).optional(),
+        search: z.string().max(100).optional(),
+      }),
+    }
   }, async (request, reply) => {
-    const { page, limit } = request.query;
+    const { page, limit, type, search } = request.query;
     const history = await inventoryService.getGlobalHistory(
       clampPage(page),
-      clampLimit(limit, 50)
+      clampLimit(limit, 50),
+      { ...(type ? { type } : {}), ...(search ? { search } : {}) }
     );
     return reply.send(history);
   });

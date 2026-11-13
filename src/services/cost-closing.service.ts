@@ -29,6 +29,10 @@ function resolvePeriod(input: { month?: string | undefined; start_date?: string 
 }
 
 export class CostClosingService {
+  async listClosings() {
+    return costClosingRepository.listClosings();
+  }
+
   async closeMonth(input: { month?: string | undefined; start_date?: string | undefined; end_date?: string | undefined }) {
     const v = CloseMonthSchema.parse(input);
     if (!v.month && (!v.start_date || !v.end_date)) {

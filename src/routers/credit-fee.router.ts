@@ -15,6 +15,14 @@ export const creditFeeRoutes: FastifyPluginAsyncZod = async (fastify) => {
     return reply.send(await creditFeeService.listTiers());
   });
 
+  fastify.post('/', {
+    onRequest: [fastify.authenticate],
+    preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])],
+    schema: { body: CreditFeeSchema.create },
+  }, async (request, reply) => {
+    return reply.code(201).send(await creditFeeService.createTier(request.body));
+  });
+
   fastify.put('/:id', {
     onRequest: [fastify.authenticate],
     preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])],

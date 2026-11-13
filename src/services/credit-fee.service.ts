@@ -1,10 +1,18 @@
 import { creditFeeRepository } from '../repositories/credit-fee.repository.js';
-import { CreditFeeSchema, type CreditFeeUpdate } from '../schemas/credit-fee.schema.js';
-import { NotFoundError } from '../lib/errors.js';
+import { CreditFeeSchema, type CreditFeeCreate, type CreditFeeUpdate } from '../schemas/credit-fee.schema.js';
+import { ConflictError, NotFoundError } from '../lib/errors.js';
 
 export class CreditFeeService {
   async listTiers() {
     return creditFeeRepository.listActive();
+  }
+
+  async createTier(data: CreditFeeCreate) {
+    const v = CreditFeeSchema.create.parse(data);
+    if (await creditFeeRepository.findByInstallments(v.installments)) {
+      throw new ConflictError('A credit fee tier for this number of installments already exists');
+    }
+    return creditFeeRepository.create(v);
   }
 
   async updateTier(id: string, data: CreditFeeUpdate) {

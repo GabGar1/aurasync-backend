@@ -48,6 +48,21 @@ export class CostClosingRepository {
     return row ?? null;
   }
 
+  /** Closed periods, newest first, with how many orders received costs and the total distributed. */
+  async listClosings() {
+    const rows = await db('order_monthly_allocations')
+      .groupBy('period_start', 'period_end')
+      .select(
+        db.raw("to_char(period_start, 'YYYY-MM-DD') as period_start"),
+        db.raw("to_char(period_end, 'YYYY-MM-DD') as period_end"),
+        db.raw('COUNT(DISTINCT order_id)::int as orders'),
+        db.raw('COALESCE(SUM(amount), 0)::float8 as total_allocated'),
+        db.raw('MAX(created_at) as closed_at')
+      )
+      .orderBy('period_start', 'desc');
+    return rows.map((r: any) => ({ ...r, total_allocated: Math.round(Number(r.total_allocated) * 100) / 100 }));
+  }
+
   async aggregateOrders(start: string, end: string) {
     const { from, to } = orderWindow(start, end);
     const orders = await db('orders')
