@@ -71,5 +71,11 @@ export const ExternalSaleSchema = {
   }),
 };
 
+/** The live preview runs while the form is still being filled: the customer is not needed yet. */
+export const ExternalSalePreviewSchema = ExternalSaleSchema.create.extend({
+  customer_name: z.string().max(255).optional(),
+});
+
 export type ExternalSaleCreate = z.input<typeof ExternalSaleSchema.create>;
+export type ExternalSalePreview = z.input<typeof ExternalSalePreviewSchema>;
 export type ExternalSaleResponse = z.infer<typeof ExternalSaleSchema.response>;

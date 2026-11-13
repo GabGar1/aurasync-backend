@@ -57,6 +57,11 @@ describe("mapNuvemshopOrder", () => {
     ]);
   });
 
+  it("keeps the order number the store owner sees on Nuvemshop", () => {
+    assert.strictEqual(mapNuvemshopOrder({ ...raw, number: 1043 }).number, "1043");
+    assert.strictEqual(mapNuvemshopOrder(raw).number, null);
+  });
+
   it("falls back to the contact name and tolerates a missing product list", () => {
     const order = mapNuvemshopOrder({ ...raw, customer: null, products: undefined });
     assert.strictEqual(order.customer.name, "Maria Contato");
@@ -95,5 +100,21 @@ describe("mapNuvemshopProduct", () => {
     assert.strictEqual(product.name, "Produto sem nome");
     assert.strictEqual(product.category, "Geral");
     assert.strictEqual(product.is_active, false);
+    assert.strictEqual(product.image_url, null);
+  });
+
+  it("takes the first image by position as the product photo (https only)", () => {
+    const product = mapNuvemshopProduct({
+      id: 2, name: { pt: "Anel" }, published: true, variants: [],
+      images: [
+        { src: "https://acdn.mitiendanube.com/stores/1/products/b.jpg", position: 2 },
+        { src: "https://acdn.mitiendanube.com/stores/1/products/a.jpg", position: 1 },
+      ],
+    });
+    assert.strictEqual(product.image_url, "https://acdn.mitiendanube.com/stores/1/products/a.jpg");
+    assert.strictEqual(
+      mapNuvemshopProduct({ id: 3, name: {}, published: true, variants: [], images: [{ src: "javascript:alert(1)" }] }).image_url,
+      null,
+    );
   });
 });

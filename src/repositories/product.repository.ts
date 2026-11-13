@@ -8,6 +8,7 @@ export interface Product {
   name: string;
   category: string | null;
   is_active: boolean;
+  image_url?: string | null;
   deleted_at?: Date | null;
   created_at: Date;
   updated_at: Date;
@@ -94,6 +95,7 @@ export interface NuvemshopProductData {
   name: string;
   category?: string;
   is_active: boolean;
+  image_url?: string | null;
   variants: NuvemshopVariantData[];
 }
 

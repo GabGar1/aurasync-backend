@@ -50,6 +50,42 @@ describe("Dashboard metrics", () => {
     assert.strictEqual(stats.repeat_customers.repeat_rate, 0.67);
   });
 
+  it("summarizes revenue, orders, ticket and profit, and the same for the previous period", async () => {
+    // Current window (last 30 days): 2 orders. Previous window (30-60 days ago): 1 order.
+    await insertOrder({ created_at: daysAgo(2), total_amount: 300, total_profit: 120 });
+    await insertOrder({ created_at: daysAgo(5), total_amount: 100, discount_amount: 20, total_profit: 30 });
+    await insertOrder({ created_at: daysAgo(40), total_amount: 200, total_profit: 50 });
+    await insertOrder({ created_at: daysAgo(3), status: "CANCELED", total_amount: 999, total_profit: 999 });
+
+    const stats = await dashboardService.getOrdersStats(30);
+
+    assert.deepStrictEqual(stats.summary, {
+      revenue: 400,
+      orders: 2,
+      average_order_value: 200,
+      profit: 150,
+      // profit over net revenue (400 - 20 discount)
+      margin_percent: 39.47,
+    });
+    assert.deepStrictEqual(stats.previous_summary, {
+      revenue: 200,
+      orders: 1,
+      average_order_value: 200,
+      profit: 50,
+      margin_percent: 25,
+    });
+  });
+
+  it("compares an explicit date range with the range of the same length right before it", async () => {
+    await insertOrder({ created_at: new Date("2026-08-10T15:00:00Z"), total_amount: 100, total_profit: 10 });
+    await insertOrder({ created_at: new Date("2026-07-25T15:00:00Z"), total_amount: 70, total_profit: 7 });
+
+    const stats = await dashboardService.getOrdersStats(30, { start_date: "2026-08-01", end_date: "2026-08-15" });
+
+    assert.strictEqual(stats.summary.revenue, 100);
+    assert.strictEqual(stats.previous_summary.revenue, 70, "previous range is 2026-07-17..2026-07-31");
+  });
+
   it("measures days without sale from the last sale, not from the last sync (B10)", async () => {
     await insertOrder({ created_at: daysAgo(100) }, [{ variant_id: variantId, quantity: 1 }]);
 

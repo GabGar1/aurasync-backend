@@ -3,7 +3,6 @@ import { productRepository } from '../repositories/product.repository.js';
 import { productSubgroupRepository } from '../repositories/product-subgroup.repository.js';
 import { CostSchema, type CostComponentCreate, type CostComponentUpdate, type CostAssociationCreate, type CostAssociateSubgroup, type CostAssociateBatch, type CostAssociateSubgroupBatch, type CostDeleteSubgroupAssociations, type CostSimulateInput, type CostAssociateProductBatch } from '../schemas/cost.schema.js';
 import { computeOrderCosts } from '../lib/cost-engine.js';
-import { db } from '../lib/db.js';
 import { NotFoundError } from '../lib/errors.js';
 
 export class CostService {
@@ -69,46 +68,14 @@ export class CostService {
 
   async simulateCosts(input: CostSimulateInput) {
     const validated = CostSchema.simulate.parse(input);
-    const variant = await db('product_variants')
-      .join('products', 'products.id', 'product_variants.product_id')
-      .where('product_variants.id', validated.variant_id)
-      .whereNull('product_variants.deleted_at')
-      .select('product_variants.id', 'product_variants.product_id', 'products.subgroup_id', 'product_variants.cost_price', 'product_variants.packaging_cost', 'product_variants.platform_fee_percent')
-      .first();
-    if (!variant) throw new NotFoundError('Product variant not found');
-
-    const toComponent = (c: any) => ({
-      id: c.id,
-      name: c.name,
-      type: c.type,
-      category: c.category,
-      value: Number(c.value),
-      calculation_base: c.calculation_base,
-      quantity: c.quantity,
-      max_products_per_package: c.max_products_per_package,
-      consolidates: c.consolidates,
-      applies_to_fair_only: c.applies_to_fair_only,
-    });
-
-    const productComps = (await costRepository.getComponentsByProductIds([variant.product_id])).map(toComponent);
-    const subgroupComps = variant.subgroup_id
-      ? (await costRepository.getComponentsBySubgroupIds([variant.subgroup_id])).map(toComponent)
-      : [];
-
-    const result = computeOrderCosts(
-      [{
-        variant_id: variant.id,
-        product_id: variant.product_id,
-        subgroup_id: variant.subgroup_id ?? null,
-        unit_price: validated.unit_price,
-        quantity: validated.quantity,
-        product_cost: Number(variant.cost_price || 0),
-        legacy_packaging_cost: Number(variant.packaging_cost || 0),
-        legacy_platform_fee_percent: Number(variant.platform_fee_percent || 0),
-        components: [...productComps, ...subgroupComps],
-      }],
-      { shipping_cost_owner: 0, discount_amount: 0 }
+    const { items } = await costRepository.buildCostEngineItems(
+      [{ variant_id: validated.variant_id, unit_price: validated.unit_price, quantity: validated.quantity }],
+      undefined,
+      { activeVariantsOnly: true }
     );
+    if (items.length === 0) throw new NotFoundError('Product variant not found');
+
+    const result = computeOrderCosts(items, { shipping_cost_owner: 0, discount_amount: 0 });
 
     return result.items[0];
   }

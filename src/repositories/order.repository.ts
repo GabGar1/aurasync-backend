@@ -36,6 +36,7 @@ export interface MissingOrderItem {
 export interface Order {
   id: string;
   nuvemshop_order_id: string | null;
+  nuvemshop_order_number?: string | null;
   source: string;
   total_cost: number;
   total_profit: number;
@@ -131,6 +132,8 @@ export interface NuvemshopOrderItemData {
 
 export interface NuvemshopOrderData {
   id: string;
+  /** Sequential number shown to the store owner (#1043); id is the API's internal id. */
+  number?: string | null;
   customer: {
     name: string;
   };
@@ -246,6 +249,7 @@ export class OrderRepository {
         .first();
 
       const orderUpsertData = {
+        nuvemshop_order_number: data.number ?? null,
         customer_name: customer.name,
         status,
         total_amount: total,
@@ -484,8 +488,11 @@ export class OrderRepository {
 
     if (filters.search) {
       query = query.where((builder: Knex.QueryBuilder) => {
-        builder.where('customer_name', 'ilike', `%${filters.search}%`)
-          .orWhere('nuvemshop_order_id', 'ilike', `%${filters.search}%`);
+        const term = filters.search!.replace(/^#/, '');
+        builder.where('customer_name', 'ilike', `%${term}%`)
+          .orWhere('nuvemshop_order_id', 'ilike', `%${term}%`)
+          .orWhere('nuvemshop_order_number', term)
+          .orWhereRaw('orders.id::text ilike ?', [`${term}%`]);
       });
     }
 

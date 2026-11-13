@@ -38,9 +38,18 @@ export function mapNuvemshopOrderStatus(order: {
   return 'PENDING';
 }
 
+/** First image by position, accepted only as an https URL (it is rendered in an <img>). */
+function firstImageUrl(images: unknown): string | null {
+  if (!Array.isArray(images) || images.length === 0) return null;
+  const sorted = [...images].sort((a: any, b: any) => (a?.position ?? 0) - (b?.position ?? 0));
+  const src = (sorted[0] as any)?.src;
+  return typeof src === 'string' && /^https:\/\//i.test(src) ? src : null;
+}
+
 export function mapNuvemshopOrder(raw: any): NuvemshopOrderData {
   return {
     id: String(raw.id),
+    number: raw.number === null || raw.number === undefined ? null : String(raw.number),
     customer: { name: raw.customer?.name || raw.contact_name || 'Cliente não informado' },
     status: mapNuvemshopOrderStatus(raw),
     total: toNumber(raw.total),
@@ -77,6 +86,7 @@ export function mapNuvemshopProduct(raw: any): NuvemshopProductData {
     name: raw.name?.pt || 'Produto sem nome',
     category: raw.categories?.[0]?.name?.pt || 'Geral',
     is_active: Boolean(raw.published),
+    image_url: firstImageUrl(raw.images),
     variants: (raw.variants ?? []).map((v: any) => {
       const variant: Record<string, unknown> = {
         id: String(v.id),

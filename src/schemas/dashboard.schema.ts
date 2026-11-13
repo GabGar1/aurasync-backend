@@ -121,7 +121,18 @@ export const RepeatCustomers = z.object({
   repeat_rate: z.number(),
 });
 
+export const PeriodSummary = z.object({
+  revenue: z.number(),
+  orders: z.number().int(),
+  average_order_value: z.number(),
+  profit: z.number(),
+  margin_percent: z.number(),
+});
+
 export const DashboardOrdersResponse = z.object({
+  summary: PeriodSummary,
+  /** Same metrics for the window of the same length right before the selected one. */
+  previous_summary: PeriodSummary,
   by_hour: z.array(HourStats),
   top_products: z.array(TopProductItem),
   average_order_value: z.coerce.number(),

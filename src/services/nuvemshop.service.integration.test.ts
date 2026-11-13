@@ -7,6 +7,7 @@ import { db } from "../lib/db.js";
 import { errorHandler } from "../lib/error-handler.js";
 import { webhookRoutes } from "../routers/webhook.router.js";
 import { nuvemshopService } from "./nuvemshop.service.js";
+import { orderService } from "./order.service.js";
 import { cleanupDatabase, closeDatabase } from "../test/setup.js";
 import { startFakeNuvemshop, type FakeNuvemshop } from "../test/fake-nuvemshop.js";
 
@@ -24,6 +25,7 @@ const nuvemProduct = (id: number, variantId: number, overrides: Record<string, u
   published: true,
   updated_at: "2026-11-10T10:00:00+0000",
   variants: [{ id: variantId, sku: `SKU-${variantId}`, price: "100.00", stock: 5, cost: "40.00" }],
+  images: [{ src: `https://acdn.mitiendanube.com/stores/4242/products/${id}.jpg`, position: 1 }],
   ...overrides,
 });
 
@@ -106,6 +108,17 @@ describe("Nuvemshop webhook", () => {
     const variant = await db("product_variants").where({ nuvemshop_variant_id: "100" }).first();
     assert.strictEqual(Number(variant.price), 100);
     assert.strictEqual(variant.stock_quantity, 5);
+    assert.strictEqual(product.image_url, "https://acdn.mitiendanube.com/stores/4242/products/10.jpg");
+  });
+
+  it("stores the Nuvemshop order number and finds the order by it", async () => {
+    fake.orders.push(nuvemOrder(500, 100, { number: 1043 }));
+    await deliver({ store_id: Number(STORE_ID), event: "order/created", id: 500 });
+
+    const order = await db("orders").where({ nuvemshop_order_id: "500" }).first();
+    assert.strictEqual(order.nuvemshop_order_number, "1043");
+    const found = await orderService.getOrders(1, 10, { search: "1043" });
+    assert.deepStrictEqual(found.orders.map((o) => o.id), [order.id]);
   });
 
   it("order/paid fetches the order and stores status, items and customer", async () => {

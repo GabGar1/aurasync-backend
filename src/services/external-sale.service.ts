@@ -1,4 +1,4 @@
-import { ExternalSaleSchema, type ExternalSaleCreate } from '../schemas/external-sale.schema.js';
+import { ExternalSaleSchema, ExternalSalePreviewSchema, type ExternalSaleCreate, type ExternalSalePreview } from '../schemas/external-sale.schema.js';
 import { externalSaleRepository, type ExternalSaleInput } from '../repositories/external-sale.repository.js';
 import { costRepository } from '../repositories/cost.repository.js';
 import { creditFeeRepository } from '../repositories/credit-fee.repository.js';
@@ -7,10 +7,11 @@ import { websocketManager } from '../lib/websocket.js';
 import { customerService } from './customer.service.js';
 import { NotFoundError } from '../lib/errors.js';
 
-export class ExternalSaleService {
-  async createExternalSale(data: ExternalSaleCreate) {
-    const validated = ExternalSaleSchema.create.parse(data);
+type ValidatedExternalSale = ReturnType<typeof ExternalSalePreviewSchema.parse>;
 
+export class ExternalSaleService {
+  /** Cost of a sale with the same rules used to register it (shared by the preview and the sale). */
+  private async computeSale(validated: ValidatedExternalSale) {
     const { items: engineItems, missingVariantIds } = await costRepository.buildCostEngineItems(
       validated.items,
       undefined,
@@ -33,6 +34,27 @@ export class ExternalSaleService {
       credit_fee: creditTier ? { percent: Number(creditTier.percent), fixed_fee: Number(creditTier.fixed_fee) } : null,
       total_amount: totalAmount,
     });
+    return { grossTotal, totalAmount, costResult };
+  }
+
+  /** What the sale would cost and earn, without saving it or touching stock. */
+  async previewExternalSale(data: ExternalSalePreview) {
+    const validated = ExternalSalePreviewSchema.parse(data);
+    const { grossTotal, totalAmount, costResult } = await this.computeSale(validated);
+    const round2 = (n: number) => Math.round(n * 100) / 100;
+    return {
+      subtotal: round2(grossTotal),
+      discount_amount: round2(validated.discount_amount ?? 0),
+      total_amount: round2(totalAmount),
+      total_cost: Number(costResult.total_cost),
+      total_profit: Number(costResult.total_profit),
+      margin_percent: Number(costResult.margin_percent),
+    };
+  }
+
+  async createExternalSale(data: ExternalSaleCreate) {
+    const validated = ExternalSaleSchema.create.parse(data);
+    const { costResult } = await this.computeSale(validated);
 
     const input: ExternalSaleInput = {
       customer_name: validated.customer_name,

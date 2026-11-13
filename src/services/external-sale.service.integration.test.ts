@@ -63,6 +63,38 @@ describe("ExternalSaleService Integration Tests", () => {
     assert.strictEqual(tx.quantity_changed, -2);
   });
 
+  it("previews totals, cost and margin with the same rules as the sale, without saving anything", async () => {
+    const ordersBefore = await db("orders").count("* as count").first();
+    const stockBefore = (await db("product_variants").where({ id: variantId }).first()).stock_quantity;
+
+    const preview = await externalSaleService.previewExternalSale({
+      customer_name: "Prévia",
+      items: [{ variant_id: variantId, quantity: 2, unit_price: 80 }],
+      shipping_cost_owner: 10,
+      discount_amount: 10,
+    });
+
+    // Same numbers as the sale created in the first test (same items, freight, discount).
+    assert.deepStrictEqual(preview, {
+      subtotal: 160,
+      discount_amount: 10,
+      total_amount: 150,
+      total_cost: 72,
+      total_profit: 78,
+      margin_percent: 52,
+    });
+    assert.deepStrictEqual(await db("orders").count("* as count").first(), ordersBefore);
+    assert.strictEqual((await db("product_variants").where({ id: variantId }).first()).stock_quantity, stockBefore);
+  });
+
+  it("previews even when there is not enough stock (the check happens when registering)", async () => {
+    const preview = await externalSaleService.previewExternalSale({
+      customer_name: "Prévia",
+      items: [{ variant_id: variantId, quantity: 999, unit_price: 80 }],
+    });
+    assert.strictEqual(preview.total_amount, 79920);
+  });
+
   it("fails with rollback on insufficient stock", async () => {
     await assert.rejects(
       async () => await externalSaleService.createExternalSale({

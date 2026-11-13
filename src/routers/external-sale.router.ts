@@ -2,7 +2,7 @@ import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { externalSaleService } from '../services/external-sale.service.js';
 import { productService } from '../services/product.service.js';
 import { customerService } from '../services/customer.service.js';
-import { ExternalSaleSchema } from '../schemas/external-sale.schema.js';
+import { ExternalSaleSchema, ExternalSalePreviewSchema } from '../schemas/external-sale.schema.js';
 import { requireRole } from "../middlewares/role.middleware.js";
 import { csrfProtection } from "../middlewares/csrf.middleware.js";
 import { z } from "zod";
@@ -18,6 +18,15 @@ export const externalSaleRoutes: FastifyPluginAsyncZod = async (fastify) => {
   }, async (request, reply) => {
     const order = await externalSaleService.createExternalSale(request.body);
     return reply.code(201).send(order);
+  });
+
+  // Live summary while the sale is being filled in: same cost rules, nothing is saved.
+  fastify.post('/preview', {
+    onRequest: [fastify.authenticate],
+    preHandler: [requireRole(['ADMIN', 'SUPER_ADMIN'])],
+    schema: { body: ExternalSalePreviewSchema },
+  }, async (request, reply) => {
+    return reply.send(await externalSaleService.previewExternalSale(request.body));
   });
 
   fastify.get('/products', {

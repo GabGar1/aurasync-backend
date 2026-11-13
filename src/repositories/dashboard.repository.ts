@@ -227,8 +227,43 @@ export class DashboardRepository {
     };
   }
 
+  /** Revenue, orders, ticket and profit of valid orders in [start, end]. */
+  private async periodSummary(start: Date, end: Date) {
+    const row = (await validOrderFilter(
+      db("orders").where("orders.created_at", ">=", start).andWhere("orders.created_at", "<=", end)
+    )
+      .select(
+        db.raw("COALESCE(SUM(total_amount), 0)::float8 as revenue"),
+        db.raw("COUNT(*)::int as orders"),
+        db.raw("COALESCE(SUM(total_profit), 0)::float8 as profit"),
+        db.raw("COALESCE(SUM(total_amount - COALESCE(discount_amount, 0)), 0)::float8 as net_revenue")
+      )
+      .first()) as { revenue: number; orders: number; profit: number; net_revenue: number } | undefined;
+
+    const round2 = (n: number) => Math.round(n * 100) / 100;
+    const revenue = Number(row?.revenue ?? 0);
+    const orders = Number(row?.orders ?? 0);
+    const profit = Number(row?.profit ?? 0);
+    const netRevenue = Number(row?.net_revenue ?? 0);
+    return {
+      revenue: round2(revenue),
+      orders,
+      average_order_value: orders > 0 ? round2(revenue / orders) : 0,
+      profit: round2(profit),
+      margin_percent: netRevenue > 0 ? round2((profit / netRevenue) * 100) : 0,
+    };
+  }
+
   async getOrdersStats(days = 30, dates: { start_date?: string; end_date?: string } = {}) {
     const { start, end } = this.dateWindow(days, dates);
+    // The window of the same length right before the selected one, for the deltas.
+    const length = end.getTime() - start.getTime();
+    const previousEnd = new Date(start.getTime() - 1);
+    const previousStart = new Date(start.getTime() - length - 1);
+    const [summary, previousSummary] = await Promise.all([
+      this.periodSummary(start, end),
+      this.periodSummary(previousStart, previousEnd),
+    ]);
 
     const baseQuery = validOrderFilter(
       db("orders")
@@ -325,6 +360,8 @@ export class DashboardRepository {
     const repeat = repeatRow?.repeat_customers ?? 0;
 
     return {
+      summary,
+      previous_summary: previousSummary,
       by_hour: byHour,
       top_products: topProducts,
       average_order_value: aovRow?.aov ?? 0,
